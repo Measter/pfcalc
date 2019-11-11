@@ -113,7 +113,7 @@ fn parse_operations(input: &[Span]) -> Vec<Operation> {
                 "sqrt"      => OperationType::Builtin(Operator::Sqrt),
                 "d2rad"     => OperationType::Builtin(Operator::D2Rad),
                 "r2deg"     => OperationType::Builtin(Operator::R2Deg),
-                "rnd"       => OperationType::Builtin(Operator::Rnd),
+                "round"       => OperationType::Builtin(Operator::Rnd),
 
                 "log"       => OperationType::Builtin(Operator::Log),
 
