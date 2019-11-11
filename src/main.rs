@@ -84,17 +84,17 @@ fn parse_operations(input: &[Span]) -> Vec<Operation> {
     ops
 }
 
-fn apply_mono_func(stack: &mut Vec<f64>, span: Span, f: impl Fn(f64) -> f64) -> Result<(), (Span, ErrorKind)> {
-    let a = stack.pop().ok_or((span, ErrorKind::InsufficientStack))?;
+fn apply_mono_func(stack: &mut Vec<f64>, f: impl Fn(f64) -> f64) -> Result<(), ErrorKind> {
+    let a = stack.pop().ok_or(ErrorKind::InsufficientStack)?;
     stack.push(f(a));
 
     Ok(())
 }
 
-fn apply_bi_func(stack: &mut Vec<f64>, span: Span, f: impl Fn(f64, f64) -> f64) -> Result<(), (Span, ErrorKind)> {
+fn apply_bi_func(stack: &mut Vec<f64>, f: impl Fn(f64, f64) -> f64) -> Result<(), ErrorKind> {
     let (b, a) = stack.pop()
         .and_then(|a| stack.pop().map(|b| (a, b)))
-        .ok_or((span, ErrorKind::InsufficientStack))?;
+        .ok_or(ErrorKind::InsufficientStack)?;
 
     stack.push(f(a, b));
 
@@ -110,49 +110,58 @@ fn evaluate_operations(ops: &[Operation], variables: &HashMap<&str, f64>, functi
                 stack.push(*num);
                 Ok(())
             },
-            OperationType::BasicOp(Operator::Add) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a + b)?,
-            OperationType::BasicOp(Operator::Sub) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a - b)?,
-            OperationType::BasicOp(Operator::Mul) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a * b)?,
-            OperationType::BasicOp(Operator::Div) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a / b)?,
-            OperationType::BasicOp(Operator::Pow) => apply_bi_func(&mut stack, op.span.clone(), &f64::powf)?,
-            OperationType::BasicOp(Operator::Mod) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a % b)?,
+            OperationType::BasicOp(Operator::Add) => apply_bi_func(&mut stack, |a, b| a + b),
+            OperationType::BasicOp(Operator::Sub) => apply_bi_func(&mut stack, |a, b| a - b),
+            OperationType::BasicOp(Operator::Mul) => apply_bi_func(&mut stack, |a, b| a * b),
+            OperationType::BasicOp(Operator::Div) => apply_bi_func(&mut stack, |a, b| a / b),
+            OperationType::BasicOp(Operator::Pow) => apply_bi_func(&mut stack, &f64::powf),
+            OperationType::BasicOp(Operator::Mod) => apply_bi_func(&mut stack, |a, b| a % b),
             OperationType::Function(name) => {
                 match name.value() {
-                    "abs"      => apply_mono_func(&mut stack, op.span.clone(), &f64::abs)?,
-                    "ceil"     => apply_mono_func(&mut stack, op.span.clone(), &f64::ceil)?,
-                    "floor"    => apply_mono_func(&mut stack, op.span.clone(), &f64::floor)?,
-                    "exp"      => apply_mono_func(&mut stack, op.span.clone(), &f64::exp)?,
-                    "ln"       => apply_mono_func(&mut stack, op.span.clone(), &f64::ln)?,
-                    "log10"    => apply_mono_func(&mut stack, op.span.clone(), &f64::log10)?,
-                    "sqrt"     => apply_mono_func(&mut stack, op.span.clone(), &f64::sqrt)?,
-                    "d2rad"    => apply_mono_func(&mut stack, op.span.clone(), &f64::to_radians)?,
-                    "r2deg"    => apply_mono_func(&mut stack, op.span.clone(), &f64::to_degrees)?,
-                    "rnd"      => apply_mono_func(&mut stack, op.span.clone(), &f64::round)?,
+                    "abs"      => apply_mono_func(&mut stack, &f64::abs),
+                    "ceil"     => apply_mono_func(&mut stack, &f64::ceil),
+                    "floor"    => apply_mono_func(&mut stack, &f64::floor),
+                    "exp"      => apply_mono_func(&mut stack, &f64::exp),
+                    "ln"       => apply_mono_func(&mut stack, &f64::ln),
+                    "log10"    => apply_mono_func(&mut stack, &f64::log10),
+                    "sqrt"     => apply_mono_func(&mut stack, &f64::sqrt),
+                    "d2rad"    => apply_mono_func(&mut stack, &f64::to_radians),
+                    "r2deg"    => apply_mono_func(&mut stack, &f64::to_degrees),
+                    "rnd"      => apply_mono_func(&mut stack, &f64::round),
 
-                    "log"      => apply_bi_func(&mut stack, op.span.clone(), &f64::log)?,
-                    "pow"      => apply_bi_func(&mut stack, op.span.clone(), &f64::powf)?,
+                    "log"      => apply_bi_func(&mut stack, &f64::log),
+                    "pow"      => apply_bi_func(&mut stack, &f64::powf),
 
-                    "cos"      => apply_mono_func(&mut stack, op.span.clone(), &f64::cos)?,
-                    "cosh"     => apply_mono_func(&mut stack, op.span.clone(), &f64::cosh)?,
-                    "acos"     => apply_mono_func(&mut stack, op.span.clone(), &f64::acos)?,
-                    "acosh"    => apply_mono_func(&mut stack, op.span.clone(), &f64::acosh)?,
+                    "cos"      => apply_mono_func(&mut stack, &f64::cos),
+                    "cosh"     => apply_mono_func(&mut stack, &f64::cosh),
+                    "acos"     => apply_mono_func(&mut stack, &f64::acos),
+                    "acosh"    => apply_mono_func(&mut stack, &f64::acosh),
 
-                    "sin"      => apply_mono_func(&mut stack, op.span.clone(), &f64::sin)?,
-                    "sinh"     => apply_mono_func(&mut stack, op.span.clone(), &f64::sinh)?,
-                    "asin"     => apply_mono_func(&mut stack, op.span.clone(), &f64::asin)?,
-                    "asinh"    => apply_mono_func(&mut stack, op.span.clone(), &f64::asinh)?,
+                    "sin"      => apply_mono_func(&mut stack, &f64::sin),
+                    "sinh"     => apply_mono_func(&mut stack, &f64::sinh),
+                    "asin"     => apply_mono_func(&mut stack, &f64::asin),
+                    "asinh"    => apply_mono_func(&mut stack, &f64::asinh),
 
-                    "tan"      => apply_mono_func(&mut stack, op.span.clone(), &f64::tan)?,
-                    "tanh"     => apply_mono_func(&mut stack, op.span.clone(), &f64::tanh)?,
-                    "atan"     => apply_mono_func(&mut stack, op.span.clone(), &f64::atan)?,
-                    "atanh"    => apply_mono_func(&mut stack, op.span.clone(), &f64::atanh)?,
-                    "atan2"    => apply_bi_func(&mut stack, op.span.clone(), &f64::atan2)?,
-                    "pi"       => stack.push(std::f64::consts::PI),
-                    "e"        => stack.push(std::f64::consts::E),
+                    "tan"      => apply_mono_func(&mut stack, &f64::tan),
+                    "tanh"     => apply_mono_func(&mut stack, &f64::tanh),
+                    "atan"     => apply_mono_func(&mut stack, &f64::atan),
+                    "atanh"    => apply_mono_func(&mut stack, &f64::atanh),
+                    "atan2"    => apply_bi_func(&mut stack, &f64::atan2),
+                    "pi"       => {
+                        stack.push(std::f64::consts::PI);
+                        Ok(())
+                    },
+                    "e"        => {
+                        stack.push(std::f64::consts::E);
+                        Ok(())
+                    },
 
                     var => {
                         match (variables.get(var), functions.get(var)) {
-                            (Some(var), _) => stack.push(*var),
+                            (Some(var), _) => {
+                                stack.push(*var);
+                                Ok(())
+                            },
                             (None, Some(fun)) => {
                                 let mut fun_vars = variables.clone();
 
@@ -163,13 +172,16 @@ fn evaluate_operations(ops: &[Operation], variables: &HashMap<&str, f64>, functi
 
                                 let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span.clone())?;
                                 stack.push(result);
+                                Ok(())
                             },
-                            (None, None) => return Err((op.span.clone(), ErrorKind::UnknownFunction)),
+                            (None, None) => Err(ErrorKind::UnknownFunction),
                         }
                     }
                 }
             }
         };
+
+        ret.map_err(|e|(op.span.clone(), e))?;
     }
 
     if stack.len() != 1 {
