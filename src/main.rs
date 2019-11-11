@@ -164,7 +164,13 @@ fn apply_bi_func(stack: &mut Vec<f64>, f: impl Fn(f64, f64) -> f64) -> Result<()
     Ok(())
 }
 
-fn evaluate_operations(ops: &[Operation], variables: &HashMap<&str, f64>, functions: &HashMap<Span, CustomFunction>, total_span: Span) -> Result<f64, (Span, ErrorKind)> {
+fn evaluate_operations(
+    ops: &[Operation],
+    variables: &HashMap<&str, f64>,
+    functions: &HashMap<Span, CustomFunction>,
+    total_span: Span
+) -> Result<f64, (Span, ErrorKind)>
+{
     let mut stack = Vec::new();
 
     for op in ops {
