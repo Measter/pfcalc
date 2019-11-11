@@ -187,8 +187,7 @@ fn starts_with_digit(input: &str) -> bool {
 }
 
 fn process_input(input: String, variables: &mut HashMap<String, f64>, functions: &mut HashMap<String, CustomFunction>) {
-    let input = input.into_boxed_str();
-    let input: Rc<str> = input.into();
+    let input: Rc<str> = input.into_boxed_str().into();
 
     let total_span = Span::new(Rc::clone(&input));
     let parts = get_parts(Rc::clone(&input));
