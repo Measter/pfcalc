@@ -1,4 +1,10 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    rc::Rc,
+};
+
+mod whitespace;
+use whitespace::*;
 
 #[derive(Debug)]
 enum Operator {
@@ -11,16 +17,16 @@ enum Operator {
 }
 
 #[derive(Debug)]
-enum OperationType<'a> {
+enum OperationType {
     Number(f64),
     BasicOp(Operator),
-    Function(&'a str),
+    Function(Span),
 }
 
 #[derive(Debug)]
-struct Operation<'a> {
-    span: Span<'a>,
-    op_type: OperationType<'a>,
+struct Operation {
+    span: Span,
+    op_type: OperationType,
 }
 
 enum ErrorKind {
@@ -44,72 +50,33 @@ impl std::fmt::Display for ErrorKind {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct Span<'a> {
-    value: &'a str,
-    start: usize,
-    len: usize
-}
-
 #[derive(Debug)]
-struct CustomFunction<'a> {
-    span: Span<'a>,
-    body: Vec<Operation<'a>>,
-    variable_names: Vec<&'a str>,
+struct CustomFunction {
+    span: Span,
+    body: Vec<Operation>,
+    variable_names: Vec<String>,
 }
 
-fn get_parts(input: &str) -> Vec<Span> {
-    let chars = &mut input.char_indices().peekable();
-    let mut parts = Vec::new();
-
-    while let Some((idx, c)) = chars.next() {
-        if c.is_whitespace() {
-            continue;
-        }
-
-        let end_idx;
-
-        loop {
-            match chars.peek() {
-                Some((_, c)) if !c.is_whitespace() => {
-                    chars.next();
-                    continue
-                },
-                Some((idx, _)) => end_idx = *idx,
-                // At end of string, just grab the rest.
-                None => end_idx = input.len(),
-            }
-
-            break;
-        }
-
-        let part = &input[idx..end_idx];
-        parts.push(Span{value: part, start: idx, len: end_idx-idx});
-    }
-
-    parts
-}
-
-fn parse_operations<'a>(input: &[Span<'a>]) -> Vec<Operation<'a>> {
+fn parse_operations(input: &[Span]) -> Vec<Operation> {
     let mut ops = Vec::new();
 
     for part in input {
-        let operation = if let Ok(num) = part.value.parse() {
+        let operation = if let Ok(num) = part.value().parse() {
             OperationType::Number(num)
         } else {
-            match part.value {
+            match part.value() {
                 "+" => OperationType::BasicOp(Operator::Add),
                 "-" => OperationType::BasicOp(Operator::Sub),
                 "*" => OperationType::BasicOp(Operator::Mul),
                 "/" => OperationType::BasicOp(Operator::Div),
                 "^" => OperationType::BasicOp(Operator::Pow),
                 "%" => OperationType::BasicOp(Operator::Mod),
-                _ => OperationType::Function(part.value),
+                _ => OperationType::Function(part.clone()),
             }
         };
 
         ops.push(Operation {
-            span: *part,
+            span: part.clone(),
             op_type: operation,
         });
     }
@@ -117,14 +84,14 @@ fn parse_operations<'a>(input: &[Span<'a>]) -> Vec<Operation<'a>> {
     ops
 }
 
-fn apply_mono_func<'a>(stack: &mut Vec<f64>, span: Span<'a>, f: impl Fn(f64) -> f64) -> Result<(), (Span<'a>, ErrorKind)> {
+fn apply_mono_func(stack: &mut Vec<f64>, span: Span, f: impl Fn(f64) -> f64) -> Result<(), (Span, ErrorKind)> {
     let a = stack.pop().ok_or((span, ErrorKind::InsufficientStack))?;
     stack.push(f(a));
 
     Ok(())
 }
 
-fn apply_bi_func<'a>(stack: &mut Vec<f64>, span: Span<'a>, f: impl Fn(f64, f64) -> f64) -> Result<(), (Span<'a>, ErrorKind)> {
+fn apply_bi_func(stack: &mut Vec<f64>, span: Span, f: impl Fn(f64, f64) -> f64) -> Result<(), (Span, ErrorKind)> {
     let (b, a) = stack.pop()
         .and_then(|a| stack.pop().map(|b| (a, b)))
         .ok_or((span, ErrorKind::InsufficientStack))?;
@@ -134,51 +101,51 @@ fn apply_bi_func<'a>(stack: &mut Vec<f64>, span: Span<'a>, f: impl Fn(f64, f64) 
     Ok(())
 }
 
-fn evaluate_operations<'a>(ops: &'a [Operation], variables: &HashMap<&str, f64>, functions: &'a HashMap<&'a str, CustomFunction<'a>>, total_span: Span<'a>) -> Result<f64, (Span<'a>, ErrorKind)> {
+fn evaluate_operations(ops: &[Operation], variables: &HashMap<String, f64>, functions: &HashMap<String, CustomFunction>, total_span: Span) -> Result<f64, (Span, ErrorKind)> {
     let mut stack = Vec::new();
 
     for op in ops {
         match &op.op_type {
             OperationType::Number(num) => stack.push(*num),
-            OperationType::BasicOp(Operator::Add) => apply_bi_func(&mut stack, op.span, |a, b| a + b)?,
-            OperationType::BasicOp(Operator::Sub) => apply_bi_func(&mut stack, op.span, |a, b| a - b)?,
-            OperationType::BasicOp(Operator::Mul) => apply_bi_func(&mut stack, op.span, |a, b| a * b)?,
-            OperationType::BasicOp(Operator::Div) => apply_bi_func(&mut stack, op.span, |a, b| a / b)?,
-            OperationType::BasicOp(Operator::Pow) => apply_bi_func(&mut stack, op.span, &f64::powf)?,
-            OperationType::BasicOp(Operator::Mod) => apply_bi_func(&mut stack, op.span, |a, b| a % b)?,
+            OperationType::BasicOp(Operator::Add) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a + b)?,
+            OperationType::BasicOp(Operator::Sub) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a - b)?,
+            OperationType::BasicOp(Operator::Mul) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a * b)?,
+            OperationType::BasicOp(Operator::Div) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a / b)?,
+            OperationType::BasicOp(Operator::Pow) => apply_bi_func(&mut stack, op.span.clone(), &f64::powf)?,
+            OperationType::BasicOp(Operator::Mod) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a % b)?,
             OperationType::Function(name) => {
-                match name {
-                    &"abs"      => apply_mono_func(&mut stack, op.span, &f64::abs)?,
-                    &"ceil"     => apply_mono_func(&mut stack, op.span, &f64::ceil)?,
-                    &"floor"    => apply_mono_func(&mut stack, op.span, &f64::floor)?,
-                    &"exp"      => apply_mono_func(&mut stack, op.span, &f64::exp)?,
-                    &"ln"       => apply_mono_func(&mut stack, op.span, &f64::ln)?,
-                    &"log10"    => apply_mono_func(&mut stack, op.span, &f64::log10)?,
-                    &"sqrt"     => apply_mono_func(&mut stack, op.span, &f64::sqrt)?,
-                    &"d2rad"    => apply_mono_func(&mut stack, op.span, &f64::to_radians)?,
-                    &"r2deg"    => apply_mono_func(&mut stack, op.span, &f64::to_degrees)?,
-                    &"rnd"      => apply_mono_func(&mut stack, op.span, &f64::round)?,
+                match name.value() {
+                    "abs"      => apply_mono_func(&mut stack, op.span.clone(), &f64::abs)?,
+                    "ceil"     => apply_mono_func(&mut stack, op.span.clone(), &f64::ceil)?,
+                    "floor"    => apply_mono_func(&mut stack, op.span.clone(), &f64::floor)?,
+                    "exp"      => apply_mono_func(&mut stack, op.span.clone(), &f64::exp)?,
+                    "ln"       => apply_mono_func(&mut stack, op.span.clone(), &f64::ln)?,
+                    "log10"    => apply_mono_func(&mut stack, op.span.clone(), &f64::log10)?,
+                    "sqrt"     => apply_mono_func(&mut stack, op.span.clone(), &f64::sqrt)?,
+                    "d2rad"    => apply_mono_func(&mut stack, op.span.clone(), &f64::to_radians)?,
+                    "r2deg"    => apply_mono_func(&mut stack, op.span.clone(), &f64::to_degrees)?,
+                    "rnd"      => apply_mono_func(&mut stack, op.span.clone(), &f64::round)?,
 
-                    &"log"      => apply_bi_func(&mut stack, op.span, &f64::log)?,
-                    &"pow"      => apply_bi_func(&mut stack, op.span, &f64::powf)?,
+                    "log"      => apply_bi_func(&mut stack, op.span.clone(), &f64::log)?,
+                    "pow"      => apply_bi_func(&mut stack, op.span.clone(), &f64::powf)?,
 
-                    &"cos"      => apply_mono_func(&mut stack, op.span, &f64::cos)?,
-                    &"cosh"     => apply_mono_func(&mut stack, op.span, &f64::cosh)?,
-                    &"acos"     => apply_mono_func(&mut stack, op.span, &f64::acos)?,
-                    &"acosh"    => apply_mono_func(&mut stack, op.span, &f64::acosh)?,
+                    "cos"      => apply_mono_func(&mut stack, op.span.clone(), &f64::cos)?,
+                    "cosh"     => apply_mono_func(&mut stack, op.span.clone(), &f64::cosh)?,
+                    "acos"     => apply_mono_func(&mut stack, op.span.clone(), &f64::acos)?,
+                    "acosh"    => apply_mono_func(&mut stack, op.span.clone(), &f64::acosh)?,
 
-                    &"sin"      => apply_mono_func(&mut stack, op.span, &f64::sin)?,
-                    &"sinh"     => apply_mono_func(&mut stack, op.span, &f64::sinh)?,
-                    &"asin"     => apply_mono_func(&mut stack, op.span, &f64::asin)?,
-                    &"asinh"    => apply_mono_func(&mut stack, op.span, &f64::asinh)?,
+                    "sin"      => apply_mono_func(&mut stack, op.span.clone(), &f64::sin)?,
+                    "sinh"     => apply_mono_func(&mut stack, op.span.clone(), &f64::sinh)?,
+                    "asin"     => apply_mono_func(&mut stack, op.span.clone(), &f64::asin)?,
+                    "asinh"    => apply_mono_func(&mut stack, op.span.clone(), &f64::asinh)?,
 
-                    &"tan"      => apply_mono_func(&mut stack, op.span, &f64::tan)?,
-                    &"tanh"     => apply_mono_func(&mut stack, op.span, &f64::tanh)?,
-                    &"atan"     => apply_mono_func(&mut stack, op.span, &f64::atan)?,
-                    &"atanh"    => apply_mono_func(&mut stack, op.span, &f64::atanh)?,
-                    &"atan2"    => apply_bi_func(&mut stack, op.span, &f64::atan2)?,
-                    &"pi"       => stack.push(std::f64::consts::PI),
-                    &"e"        => stack.push(std::f64::consts::E),
+                    "tan"      => apply_mono_func(&mut stack, op.span.clone(), &f64::tan)?,
+                    "tanh"     => apply_mono_func(&mut stack, op.span.clone(), &f64::tanh)?,
+                    "atan"     => apply_mono_func(&mut stack, op.span.clone(), &f64::atan)?,
+                    "atanh"    => apply_mono_func(&mut stack, op.span.clone(), &f64::atanh)?,
+                    "atan2"    => apply_bi_func(&mut stack, op.span.clone(), &f64::atan2)?,
+                    "pi"       => stack.push(std::f64::consts::PI),
+                    "e"        => stack.push(std::f64::consts::E),
 
                     var => {
                         match (variables.get(var), functions.get(var)) {
@@ -187,14 +154,14 @@ fn evaluate_operations<'a>(ops: &'a [Operation], variables: &HashMap<&str, f64>,
                                 let mut fun_vars = variables.clone();
 
                                 for variable_name in fun.variable_names.iter().rev() {
-                                    let val = stack.pop().ok_or((op.span, ErrorKind::InsufficientStack))?;
-                                    fun_vars.insert(variable_name, val);
+                                    let val = stack.pop().ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
+                                    fun_vars.insert(variable_name.to_owned(), val);
                                 }
 
-                                let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span)?;
+                                let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span.clone())?;
                                 stack.push(result);
                             },
-                            (None, None) => return Err((op.span, ErrorKind::UnknownFunction)),
+                            (None, None) => return Err((op.span.clone(), ErrorKind::UnknownFunction)),
                         }
                     }
                 }
@@ -209,14 +176,69 @@ fn evaluate_operations<'a>(ops: &'a [Operation], variables: &HashMap<&str, f64>,
     }
 }
 
-fn print_error(orig: &str, span: Span, err: ErrorKind) {
+fn print_error(span: Span, err: ErrorKind) {
     eprintln!("Error: {}", err);
-    eprintln!("   {}", orig);
-    eprintln!("   {1:0$}{3:^^2$}", span.start, "", span.len, "");
+    eprintln!("   {}", span.input());
+    eprintln!("   {1:0$}{3:^^2$}", span.start(), "", span.len(), "");
 }
 
 fn starts_with_digit(input: &str) -> bool {
     input.chars().next().filter(char::is_ascii_digit).is_some()
+}
+
+fn process_input(input: String, variables: &mut HashMap<String, f64>, functions: &mut HashMap<String, CustomFunction>) {
+    let input = input.into_boxed_str();
+    let input: Rc<str> = input.into();
+
+    let total_span = Span::new(Rc::clone(&input));
+    let parts = get_parts(Rc::clone(&input));
+    let split_idx = parts.iter().position(|span| span.value() == "=");
+
+    match split_idx {
+        Some(idx) => {
+            let (var, expr) = parts.split_at(idx);
+
+            if var.is_empty() || var.iter().any(|v| starts_with_digit(v.value())) {
+                print_error(total_span, ErrorKind::InvalidVariableOrFunction);
+                return;
+            }
+
+            let expr = &expr[1..];
+            let name = var.last().unwrap();
+
+            println!("Defining function: {}", input);
+            let variable_names: Vec<String> = var.iter().map(|v| v.value().to_owned()).take(var.len()-1).collect();
+            let body = parse_operations(expr);
+
+            // Quick test of the function to make sure it works.
+            // We don't need the result, just to evaluate to see if it fails.
+            let mut fun_vars = variables.clone();
+            for variable_name in variable_names.iter().rev() {
+                fun_vars.insert(variable_name.clone(), 1.0);
+            }
+
+            if let Err((span, e)) = evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
+                print_error(span, e);
+            } else {
+                functions.insert(name.value().to_owned(), CustomFunction { span: total_span.clone(), body, variable_names });
+            }
+        },
+        None => {
+            println!("Evaluating Expression: {}", input);
+            let ops = parse_operations(&parts);
+            let result = evaluate_operations(&ops, &variables, &functions, total_span);
+
+            match result {
+                Ok(result) => {
+                    variables.insert("ans".to_owned(), result);
+
+                    println!("Result: {}", result);
+                    println!();
+                },
+                Err((span, e)) => print_error(span, e),
+            }
+        },
+    };
 }
 
 fn main() {
@@ -229,55 +251,7 @@ fn main() {
     let mut variables = HashMap::new();
     let mut functions = HashMap::new();
 
-    for input in &inputs {
-        let total_span = Span { value: input, start: 0, len: input.len() };
-        let parts = get_parts(input);
-        let split_idx = parts.iter().position(|span| span.value == "=");
-
-        match split_idx {
-            Some(idx) => {
-                let (var, expr) = parts.split_at(idx);
-
-                if var.is_empty() || var.iter().any(|v| starts_with_digit(v.value)) {
-                    print_error(input, total_span, ErrorKind::InvalidVariableOrFunction);
-                    continue;
-                }
-
-                let expr = &expr[1..];
-                let name = var.last().unwrap();
-
-                println!("Defining function: {}", input);
-                let variable_names: Vec<&str> = var.iter().map(|v| v.value).take(var.len()-1).collect();
-                let body = parse_operations(expr);
-
-                // Quick test of the function to make sure it works.
-                // We don't need the result, just to evaluate to see if it fails.
-                let mut fun_vars = variables.clone();
-                for &variable_name in variable_names.iter().rev() {
-                    fun_vars.insert(variable_name, 1.0);
-                }
-
-                if let Err((span, e)) = evaluate_operations(&body, &fun_vars, &functions, total_span) {
-                    print_error(input, span, e);
-                } else {
-                    functions.insert(name.value, CustomFunction { span: total_span, body, variable_names });
-                }
-            },
-            None => {
-                println!("Evaluating Expression: {}", input);
-                let ops = parse_operations(&parts);
-                let result = evaluate_operations(&ops, &variables, &functions, total_span);
-
-                match result {
-                    Ok(result) => {
-                        variables.insert("ans", result);
-
-                        println!("Result: {}", result);
-                        println!();
-                    },
-                    Err((span, e)) => print_error(input, span, e),
-                }
-            },
-        };
+    for input in inputs {
+        process_input(input, &mut variables, &mut functions);
     }
 }
