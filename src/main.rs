@@ -54,7 +54,7 @@ impl std::fmt::Display for ErrorKind {
 struct CustomFunction {
     span: Span,
     body: Vec<Operation>,
-    variable_names: Vec<String>,
+    variable_names: Vec<Span>,
 }
 
 fn parse_operations(input: &[Span]) -> Vec<Operation> {
@@ -101,12 +101,15 @@ fn apply_bi_func(stack: &mut Vec<f64>, span: Span, f: impl Fn(f64, f64) -> f64) 
     Ok(())
 }
 
-fn evaluate_operations(ops: &[Operation], variables: &HashMap<String, f64>, functions: &HashMap<String, CustomFunction>, total_span: Span) -> Result<f64, (Span, ErrorKind)> {
+fn evaluate_operations(ops: &[Operation], variables: &HashMap<&str, f64>, functions: &HashMap<Span, CustomFunction>, total_span: Span) -> Result<f64, (Span, ErrorKind)> {
     let mut stack = Vec::new();
 
     for op in ops {
-        match &op.op_type {
-            OperationType::Number(num) => stack.push(*num),
+        let ret = match &op.op_type {
+            OperationType::Number(num) => {
+                stack.push(*num);
+                Ok(())
+            },
             OperationType::BasicOp(Operator::Add) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a + b)?,
             OperationType::BasicOp(Operator::Sub) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a - b)?,
             OperationType::BasicOp(Operator::Mul) => apply_bi_func(&mut stack, op.span.clone(), |a, b| a * b)?,
@@ -155,7 +158,7 @@ fn evaluate_operations(ops: &[Operation], variables: &HashMap<String, f64>, func
 
                                 for variable_name in fun.variable_names.iter().rev() {
                                     let val = stack.pop().ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
-                                    fun_vars.insert(variable_name.to_owned(), val);
+                                    fun_vars.insert(variable_name.value(), val);
                                 }
 
                                 let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span.clone())?;
@@ -166,7 +169,7 @@ fn evaluate_operations(ops: &[Operation], variables: &HashMap<String, f64>, func
                     }
                 }
             }
-        }
+        };
     }
 
     if stack.len() != 1 {
@@ -186,7 +189,7 @@ fn starts_with_digit(input: &str) -> bool {
     input.chars().next().filter(char::is_ascii_digit).is_some()
 }
 
-fn process_input(input: String, variables: &mut HashMap<String, f64>, functions: &mut HashMap<String, CustomFunction>) {
+fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &mut HashMap<Span, CustomFunction>) {
     let input: Rc<str> = input.into_boxed_str().into();
 
     let total_span = Span::new(Rc::clone(&input));
@@ -206,20 +209,20 @@ fn process_input(input: String, variables: &mut HashMap<String, f64>, functions:
             let name = var.last().unwrap();
 
             println!("Defining function: {}", input);
-            let variable_names: Vec<String> = var.iter().map(|v| v.value().to_owned()).take(var.len()-1).collect();
+            let variable_names: Vec<Span> = var.iter().map(|v| v.clone()).take(var.len()-1).collect();
             let body = parse_operations(expr);
 
             // Quick test of the function to make sure it works.
             // We don't need the result, just to evaluate to see if it fails.
             let mut fun_vars = variables.clone();
             for variable_name in variable_names.iter().rev() {
-                fun_vars.insert(variable_name.clone(), 1.0);
+                fun_vars.insert(variable_name.value(), 1.0);
             }
 
             if let Err((span, e)) = evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
                 print_error(span, e);
             } else {
-                functions.insert(name.value().to_owned(), CustomFunction { span: total_span.clone(), body, variable_names });
+                functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
             }
         },
         None => {
@@ -229,7 +232,7 @@ fn process_input(input: String, variables: &mut HashMap<String, f64>, functions:
 
             match result {
                 Ok(result) => {
-                    variables.insert("ans".to_owned(), result);
+                    variables.insert("ans", result);
 
                     println!("Result: {}", result);
                     println!();

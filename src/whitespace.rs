@@ -1,10 +1,35 @@
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    hash::{Hash, Hasher},
+    cmp::{Eq, PartialEq},
+    borrow::Borrow,
+};
 
 #[derive(Debug, Clone)]
 pub struct Span {
     input: Rc<str>,
     start: usize,
     len: usize
+}
+
+impl Hash for Span {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value().hash(state)
+    }
+}
+
+impl PartialEq for Span {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.value() == rhs.value()
+    }
+}
+
+impl Eq for Span {}
+
+impl Borrow<str> for Span {
+    fn borrow(&self) -> &str {
+        self.value()
+    }
 }
 
 impl Span {
@@ -19,7 +44,7 @@ impl Span {
     pub fn value(&self) -> &str {
         let start = self.start;
         let end = start + self.len;
-        unsafe { self.input.get_unchecked(start..end) }
+        &self.input[start..end]
     }
 
     pub fn input(&self) -> &str {
