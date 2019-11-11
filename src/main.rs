@@ -280,7 +280,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
             let name = var.last().unwrap();
 
             println!("Defining function: {}", input);
-            let variable_names: Vec<Span> = var.iter().map(|v| v.clone()).take(var.len()-1).collect();
+            let variable_names: Vec<Span> = var.iter().cloned().take(var.len()-1).collect();
             let body = parse_operations(expr);
 
             // Quick test of the function to make sure it works.
