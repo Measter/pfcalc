@@ -14,13 +14,45 @@ enum Operator {
     Div,
     Mod,
     Pow,
+
+    Abs,
+    Ceil,
+    Floor,
+    Exp,
+    Ln,
+    Log10,
+    Sqrt,
+    D2Rad,
+    R2Deg,
+    Rnd,
+
+    Log,
+
+    Cos,
+    Cosh,
+    ACos,
+    ACosh,
+
+    Sin,
+    Sinh,
+    ASin,
+    ASinh,
+
+    Tan,
+    Tanh,
+    Atan,
+    Atanh,
+    Atan2,
+
+    Pi,
+    E,
 }
 
 #[derive(Debug)]
 enum OperationType {
     Number(f64),
-    BasicOp(Operator),
-    Function(Span),
+    Builtin(Operator),
+    CustomFunction(Span),
 }
 
 #[derive(Debug)]
@@ -65,13 +97,44 @@ fn parse_operations(input: &[Span]) -> Vec<Operation> {
             OperationType::Number(num)
         } else {
             match part.value() {
-                "+" => OperationType::BasicOp(Operator::Add),
-                "-" => OperationType::BasicOp(Operator::Sub),
-                "*" => OperationType::BasicOp(Operator::Mul),
-                "/" => OperationType::BasicOp(Operator::Div),
-                "^" => OperationType::BasicOp(Operator::Pow),
-                "%" => OperationType::BasicOp(Operator::Mod),
-                _ => OperationType::Function(part.clone()),
+                "+"         => OperationType::Builtin(Operator::Add),
+                "-"         => OperationType::Builtin(Operator::Sub),
+                "*"         => OperationType::Builtin(Operator::Mul),
+                "/"         => OperationType::Builtin(Operator::Div),
+                "^"         => OperationType::Builtin(Operator::Pow),
+                "%"         => OperationType::Builtin(Operator::Mod),
+
+                "abs"       => OperationType::Builtin(Operator::Abs),
+                "ceil"      => OperationType::Builtin(Operator::Ceil),
+                "floor"     => OperationType::Builtin(Operator::Floor),
+                "exp"       => OperationType::Builtin(Operator::Exp),
+                "ln"        => OperationType::Builtin(Operator::Ln),
+                "log10"     => OperationType::Builtin(Operator::Log10),
+                "sqrt"      => OperationType::Builtin(Operator::Sqrt),
+                "d2rad"     => OperationType::Builtin(Operator::D2Rad),
+                "r2deg"     => OperationType::Builtin(Operator::R2Deg),
+                "rnd"       => OperationType::Builtin(Operator::Rnd),
+
+                "log"       => OperationType::Builtin(Operator::Log),
+
+                "cos"       => OperationType::Builtin(Operator::Cos),
+                "cosh"      => OperationType::Builtin(Operator::Cosh),
+                "acos"      => OperationType::Builtin(Operator::ACos),
+                "acosh"     => OperationType::Builtin(Operator::ACosh),
+
+                "sin"       => OperationType::Builtin(Operator::Sin),
+                "sinh"      => OperationType::Builtin(Operator::Sinh),
+                "asin"      => OperationType::Builtin(Operator::ASin),
+                "asinh"     => OperationType::Builtin(Operator::ASinh),
+
+                "tan"       => OperationType::Builtin(Operator::Tan),
+                "tanh"      => OperationType::Builtin(Operator::Tanh),
+                "atan"      => OperationType::Builtin(Operator::Atan),
+                "atanh"     => OperationType::Builtin(Operator::Atanh),
+                "atan2"     => OperationType::Builtin(Operator::Atan2),
+                "pi"        => OperationType::Builtin(Operator::Pi),
+                "e"         => OperationType::Builtin(Operator::E),
+                _ => OperationType::CustomFunction(part.clone()),
             }
         };
 
@@ -110,73 +173,69 @@ fn evaluate_operations(ops: &[Operation], variables: &HashMap<&str, f64>, functi
                 stack.push(*num);
                 Ok(())
             },
-            OperationType::BasicOp(Operator::Add) => apply_bi_func(&mut stack, |a, b| a + b),
-            OperationType::BasicOp(Operator::Sub) => apply_bi_func(&mut stack, |a, b| a - b),
-            OperationType::BasicOp(Operator::Mul) => apply_bi_func(&mut stack, |a, b| a * b),
-            OperationType::BasicOp(Operator::Div) => apply_bi_func(&mut stack, |a, b| a / b),
-            OperationType::BasicOp(Operator::Pow) => apply_bi_func(&mut stack, &f64::powf),
-            OperationType::BasicOp(Operator::Mod) => apply_bi_func(&mut stack, |a, b| a % b),
-            OperationType::Function(name) => {
-                match name.value() {
-                    "abs"      => apply_mono_func(&mut stack, &f64::abs),
-                    "ceil"     => apply_mono_func(&mut stack, &f64::ceil),
-                    "floor"    => apply_mono_func(&mut stack, &f64::floor),
-                    "exp"      => apply_mono_func(&mut stack, &f64::exp),
-                    "ln"       => apply_mono_func(&mut stack, &f64::ln),
-                    "log10"    => apply_mono_func(&mut stack, &f64::log10),
-                    "sqrt"     => apply_mono_func(&mut stack, &f64::sqrt),
-                    "d2rad"    => apply_mono_func(&mut stack, &f64::to_radians),
-                    "r2deg"    => apply_mono_func(&mut stack, &f64::to_degrees),
-                    "rnd"      => apply_mono_func(&mut stack, &f64::round),
+            OperationType::Builtin(Operator::Add)   => apply_bi_func(&mut stack, |a, b| a + b),
+            OperationType::Builtin(Operator::Sub)   => apply_bi_func(&mut stack, |a, b| a - b),
+            OperationType::Builtin(Operator::Mul)   => apply_bi_func(&mut stack, |a, b| a * b),
+            OperationType::Builtin(Operator::Div)   => apply_bi_func(&mut stack, |a, b| a / b),
+            OperationType::Builtin(Operator::Pow)   => apply_bi_func(&mut stack, &f64::powf),
+            OperationType::Builtin(Operator::Mod)   => apply_bi_func(&mut stack, |a, b| a % b),
 
-                    "log"      => apply_bi_func(&mut stack, &f64::log),
-                    "pow"      => apply_bi_func(&mut stack, &f64::powf),
+            OperationType::Builtin(Operator::Abs)   => apply_mono_func(&mut stack, &f64::abs),
+            OperationType::Builtin(Operator::Ceil)  => apply_mono_func(&mut stack, &f64::ceil),
+            OperationType::Builtin(Operator::Floor) => apply_mono_func(&mut stack, &f64::floor),
+            OperationType::Builtin(Operator::Exp)   => apply_mono_func(&mut stack, &f64::exp),
+            OperationType::Builtin(Operator::Ln)    => apply_mono_func(&mut stack, &f64::ln),
+            OperationType::Builtin(Operator::Log10) => apply_mono_func(&mut stack, &f64::log10),
+            OperationType::Builtin(Operator::Sqrt)  => apply_mono_func(&mut stack, &f64::sqrt),
+            OperationType::Builtin(Operator::D2Rad) => apply_mono_func(&mut stack, &f64::to_radians),
+            OperationType::Builtin(Operator::R2Deg) => apply_mono_func(&mut stack, &f64::to_degrees),
+            OperationType::Builtin(Operator::Rnd)   => apply_mono_func(&mut stack, &f64::round),
 
-                    "cos"      => apply_mono_func(&mut stack, &f64::cos),
-                    "cosh"     => apply_mono_func(&mut stack, &f64::cosh),
-                    "acos"     => apply_mono_func(&mut stack, &f64::acos),
-                    "acosh"    => apply_mono_func(&mut stack, &f64::acosh),
+            OperationType::Builtin(Operator::Log)   => apply_bi_func(&mut stack, &f64::log),
 
-                    "sin"      => apply_mono_func(&mut stack, &f64::sin),
-                    "sinh"     => apply_mono_func(&mut stack, &f64::sinh),
-                    "asin"     => apply_mono_func(&mut stack, &f64::asin),
-                    "asinh"    => apply_mono_func(&mut stack, &f64::asinh),
+            OperationType::Builtin(Operator::Cos)   => apply_mono_func(&mut stack, &f64::cos),
+            OperationType::Builtin(Operator::Cosh)  => apply_mono_func(&mut stack, &f64::cosh),
+            OperationType::Builtin(Operator::ACos)  => apply_mono_func(&mut stack, &f64::acos),
+            OperationType::Builtin(Operator::ACosh) => apply_mono_func(&mut stack, &f64::acosh),
 
-                    "tan"      => apply_mono_func(&mut stack, &f64::tan),
-                    "tanh"     => apply_mono_func(&mut stack, &f64::tanh),
-                    "atan"     => apply_mono_func(&mut stack, &f64::atan),
-                    "atanh"    => apply_mono_func(&mut stack, &f64::atanh),
-                    "atan2"    => apply_bi_func(&mut stack, &f64::atan2),
-                    "pi"       => {
-                        stack.push(std::f64::consts::PI);
+            OperationType::Builtin(Operator::Sin)   => apply_mono_func(&mut stack, &f64::sin),
+            OperationType::Builtin(Operator::Sinh)  => apply_mono_func(&mut stack, &f64::sinh),
+            OperationType::Builtin(Operator::ASin)  => apply_mono_func(&mut stack, &f64::asin),
+            OperationType::Builtin(Operator::ASinh) => apply_mono_func(&mut stack, &f64::asinh),
+
+            OperationType::Builtin(Operator::Tan)   => apply_mono_func(&mut stack, &f64::tan),
+            OperationType::Builtin(Operator::Tanh)  => apply_mono_func(&mut stack, &f64::tanh),
+            OperationType::Builtin(Operator::Atan)  => apply_mono_func(&mut stack, &f64::atan),
+            OperationType::Builtin(Operator::Atanh) => apply_mono_func(&mut stack, &f64::atanh),
+            OperationType::Builtin(Operator::Atan2) => apply_bi_func(&mut stack, &f64::atan2),
+            OperationType::Builtin(Operator::Pi)    => {
+                stack.push(std::f64::consts::PI);
+                Ok(())
+            },
+            OperationType::Builtin(Operator::E)     => {
+                stack.push(std::f64::consts::E);
+                Ok(())
+            },
+            OperationType::CustomFunction(name) => {
+                let var = name.value();
+                match (variables.get(var), functions.get(var)) {
+                    (Some(var), _) => {
+                        stack.push(*var);
                         Ok(())
                     },
-                    "e"        => {
-                        stack.push(std::f64::consts::E);
-                        Ok(())
-                    },
+                    (None, Some(fun)) => {
+                        let mut fun_vars = variables.clone();
 
-                    var => {
-                        match (variables.get(var), functions.get(var)) {
-                            (Some(var), _) => {
-                                stack.push(*var);
-                                Ok(())
-                            },
-                            (None, Some(fun)) => {
-                                let mut fun_vars = variables.clone();
-
-                                for variable_name in fun.variable_names.iter().rev() {
-                                    let val = stack.pop().ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
-                                    fun_vars.insert(variable_name.value(), val);
-                                }
-
-                                let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span.clone())?;
-                                stack.push(result);
-                                Ok(())
-                            },
-                            (None, None) => Err(ErrorKind::UnknownFunction),
+                        for variable_name in fun.variable_names.iter().rev() {
+                            let val = stack.pop().ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
+                            fun_vars.insert(variable_name.value(), val);
                         }
-                    }
+
+                        let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span.clone())?;
+                        stack.push(result);
+                        Ok(())
+                    },
+                    (None, None) => Err(ErrorKind::UnknownFunction),
                 }
             }
         };
