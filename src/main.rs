@@ -1,3 +1,8 @@
+use rustyline::{
+    error::ReadlineError,
+    Editor,
+};
+
 use std::{
     collections::HashMap,
     rc::Rc,
@@ -286,6 +291,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
             let name = var.last().unwrap();
 
             println!("Defining function: {}", input);
+            println!();
             let variable_names: Vec<Span> = var.iter().cloned().take(var.len()-1).collect();
             let body = parse_operations(expr);
 
@@ -320,17 +326,58 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
     };
 }
 
+fn print_help() {
+    println!("Help");
+    println!();
+}
+
+fn print_functions(functions: &HashMap<Span, CustomFunction>) {
+    if functions.is_empty() {
+        println!("No custom functions defined");
+    } else {
+        println!("-- Custom Functions --");
+        for fun in functions.keys() {
+            println!("  {}", fun.input());
+        }
+    }
+
+    println!()
+}
+
 fn main() {
     let inputs: Vec<_> = std::env::args().skip(1).collect();
-    if inputs.is_empty() {
-        eprintln!("Must provide a post-fix expression.");
-        std::process::exit(1);
-    }
 
     let mut variables = HashMap::new();
     let mut functions = HashMap::new();
 
-    for input in inputs {
-        process_input(input, &mut variables, &mut functions);
+    if inputs.is_empty() {
+        println!("Postfix Calculator");
+        println!("type \"help\" or \"functions\" for more information.");
+
+        let mut rl = Editor::<()>::new();
+        loop {
+            let line = rl.readline(">>> ");
+            match line {
+                Ok(input) => {
+                    rl.add_history_entry(&input);
+                    match &*input {
+                        "help" => print_help(),
+                        "functions" => print_functions(&functions),
+                        _ => {
+                            process_input(input, &mut variables, &mut functions);
+                        }
+                    }
+                },
+                Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
+                Err(e) => {
+                    eprintln!("{:?}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+    } else {
+        for input in inputs {
+            process_input(input, &mut variables, &mut functions);
+        }
     }
 }
