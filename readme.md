@@ -28,7 +28,8 @@ Exposes the following `f64` functions from Rust's stdlib:
 * atan
 * atanh
 * atan2
-
+* sum
+* product
 
 And the following constants:
 
