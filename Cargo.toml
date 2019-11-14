@@ -8,3 +8,7 @@ edition = "2018"
 
 [dependencies]
 rustyline = "5.0.4"
+tabwriter = "1.1.0"
+strum = "0.16.0"
+strum_macros = "0.16.0"
+joinery = "2.0.0"

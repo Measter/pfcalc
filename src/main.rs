@@ -3,6 +3,9 @@ use rustyline::{
     Editor,
 };
 
+use tabwriter::TabWriter;
+use joinery::*;
+
 use std::{
     collections::HashMap,
     rc::Rc,
@@ -10,6 +13,7 @@ use std::{
 
 mod whitespace;
 use whitespace::*;
+use std::io::Write;
 
 #[derive(Debug)]
 enum Operator {
@@ -368,9 +372,20 @@ fn print_functions(functions: &HashMap<Span, CustomFunction>) {
         println!("No custom functions defined");
     } else {
         println!("-- Custom Functions --");
-        for fun in functions.keys() {
-            println!("  {}", fun.input());
+        let stdout = std::io::stdout();
+        let mut tw = TabWriter::new(stdout);
+        let _ = writeln!(&mut tw, "Name\tArgs\tBody");
+
+        for (name, fun) in functions {
+            let _ = write!(&mut tw, "{}", name.value());
+            let _ = write!(&mut tw, "\t{}", fun.variable_names.iter().map(|s| s.value()).join_with(", "));
+
+            let body = fun.body[0].span.start();
+
+            let _ = writeln!(&mut tw, "\t{}", &name.input()[body..]);
         }
+
+        let _ = tw.flush();
     }
 
     println!()
