@@ -49,6 +49,9 @@ enum Operator {
     Atanh,
     Atan2,
 
+    Sum,
+    Product,
+
     Pi,
     E,
 }
@@ -139,6 +142,9 @@ fn parse_operations(input: &[Span]) -> Vec<Operation> {
                 "atan2"     => OperationType::Builtin(Operator::Atan2),
                 "pi"        => OperationType::Builtin(Operator::Pi),
                 "e"         => OperationType::Builtin(Operator::E),
+
+                "sum"       => OperationType::Builtin(Operator::Sum),
+                "prod"      => OperationType::Builtin(Operator::Product),
                 _ => OperationType::CustomFunction(part.clone()),
             }
         };
@@ -219,6 +225,32 @@ fn evaluate_operations(
             OperationType::Builtin(Operator::Atan)  => apply_mono_func(&mut stack, &f64::atan),
             OperationType::Builtin(Operator::Atanh) => apply_mono_func(&mut stack, &f64::atanh),
             OperationType::Builtin(Operator::Atan2) => apply_bi_func(&mut stack, &f64::atan2),
+
+            OperationType::Builtin(Operator::Sum)   => {
+                if stack.is_empty() {
+                    Err(ErrorKind::InsufficientStack)
+                } else {
+                    let mut sum = 0.0;
+                    while let Some(r) = stack.pop() {
+                        sum += r;
+                    }
+                    stack.push(sum);
+                    Ok(())
+                }
+            },
+            OperationType::Builtin(Operator::Product)   => {
+                if stack.is_empty() {
+                    Err(ErrorKind::InsufficientStack)
+                } else {
+                    let mut sum = 0.0;
+                    while let Some(r) = stack.pop() {
+                        sum *= r;
+                    }
+                    stack.push(sum);
+                    Ok(())
+                }
+            },
+
             OperationType::Builtin(Operator::Pi)    => {
                 stack.push(std::f64::consts::PI);
                 Ok(())
