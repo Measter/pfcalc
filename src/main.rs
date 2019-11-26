@@ -382,7 +382,7 @@ fn print_functions(functions: &HashMap<Span, CustomFunction>) {
 
             let body = fun.body[0].span.start();
 
-            let _ = writeln!(&mut tw, "\t{}", &name.input()[body..]);
+            let _ = writeln!(&mut tw, "\t{}", &fun.body[0].span.input()[body..]);
         }
 
         let _ = tw.flush();
