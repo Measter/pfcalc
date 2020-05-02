@@ -1,19 +1,105 @@
 use rustyline::{
     error::ReadlineError,
-    Editor,
+    completion::Completer,
+    hint::Hinter,
+    highlight::Highlighter,
+    validate::Validator,
+    Helper, Editor, Context,
 };
 
 use tabwriter::TabWriter;
 use joinery::*;
 
 use std::{
-    collections::HashMap,
+    collections::{HashSet, HashMap},
     rc::Rc,
     io::Write,
+    borrow::Cow,
 };
 
 mod whitespace;
 use whitespace::*;
+
+struct AutoCompleter {
+    hints: HashSet<String>,
+}
+
+impl AutoCompleter {
+    fn new() -> Self {
+        let mut hints = HashSet::new();
+        hints.insert("functions".into());
+        hints.insert("variables".into());
+        hints.insert("clear functions".into());
+        hints.insert("clear variables".into());
+        hints.insert("remove".into());
+        hints.insert("abs".into());
+        hints.insert("ceil".into());
+        hints.insert("floor".into());
+        hints.insert("exp".into());
+        hints.insert("ln".into());
+        hints.insert("log10".into());
+        hints.insert("sqrt".into());
+        hints.insert("d2rad".into());
+        hints.insert("r2deg".into());
+        hints.insert("round".into());
+        hints.insert("log".into());
+        hints.insert("cos".into());
+        hints.insert("cosh".into());
+        hints.insert("acos".into());
+        hints.insert("acosh".into());
+        hints.insert("sin".into());
+        hints.insert("asin".into());
+        hints.insert("sinh".into());
+        hints.insert("asinh".into());
+        hints.insert("tan".into());
+        hints.insert("tanh".into());
+        hints.insert("atan".into());
+        hints.insert("atanh".into());
+        hints.insert("atan2".into());
+        hints.insert("pi".into());
+        hints.insert("e".into());
+        hints.insert("sum".into());
+        hints.insert("prod".into());
+        
+        Self {
+            hints
+        }
+    }
+}
+
+impl Completer for AutoCompleter {
+    type Candidate = String;
+}
+impl Hinter for AutoCompleter {
+    fn hint(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Option<String> {
+        if pos < line.len() || line.is_empty() || line.ends_with(" ") {
+            return None;
+        }
+
+        // Find the last entered token after a whitespace
+        let (pos, line) = line.rmatch_indices(" ").next()
+            .map(|(idx, _)| ( pos - (idx+1), &line[idx+1..]))
+            .unwrap_or((pos, line));
+
+        self.hints.iter()
+            .filter_map(|hint| {
+                if hint.starts_with(&line[..pos]) {
+                    Some(hint[pos..].into())
+                } else {
+                    None
+                }
+            })
+            .next()
+    }
+}
+impl Highlighter for AutoCompleter {
+    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
+        Cow::Owned("\x1b[90m".to_owned() + hint + "\x1b[0m")
+    }
+}
+impl Validator for AutoCompleter {}
+impl Helper for AutoCompleter {}
+
 
 #[derive(Debug)]
 enum Operator {
@@ -307,7 +393,7 @@ fn starts_with_digit(input: &str) -> bool {
     input.chars().next().filter(char::is_ascii_digit).is_some()
 }
 
-fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &mut HashMap<Span, CustomFunction>) {
+fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &mut HashMap<Span, CustomFunction>, mut insert_hint: impl FnMut(String)) {
     let input: Rc<str> = input.into_boxed_str().into();
 
     let total_span = Span::new(Rc::clone(&input));
@@ -346,6 +432,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
                     let mut body_span = total_span.clone();
                     body_span.set_start(body_start);
 
+                    insert_hint(name.value().into());
                     functions.insert(name.clone(), CustomFunction {
                         span: total_span.clone(),
                         body: vec![Operation {
@@ -356,6 +443,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
                 Ok(_) => {
                     println!("Function defined: {}", input);
                     println!();
+                    insert_hint(name.value().into());
                     functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
                 }
             };
@@ -443,6 +531,12 @@ fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<Span, Cus
     println!()
 }
 
+fn clear_hinter<'a> (hinter: &mut AutoCompleter, names: impl Iterator<Item = &'a str>) {
+    for name in names {
+        hinter.hints.remove(name);
+    }
+}
+
 fn main() {
     let inputs: Vec<_> = std::env::args().skip(1).collect();
 
@@ -453,7 +547,9 @@ fn main() {
         println!("Postfix Calculator");
         println!("type \"help\" for more information.");
 
-        let mut rl = Editor::<()>::new();
+        let completer = AutoCompleter::new();
+        let mut rl = Editor::new();
+        rl.set_helper(Some(completer));
         loop {
             let line = rl.readline(">>> ");
             match line {
@@ -464,12 +560,18 @@ fn main() {
                         "functions" => print_functions(&functions),
                         "variables" => print_variables(&variables, &functions),
                         "clear variables" => {
+                            if let Some(helper) = rl.helper_mut() {
+                                clear_hinter(helper, functions.iter().filter(|(_, f)| f.variable_names.is_empty()).map(|(name, _)| name.value()));
+                            }
                             functions.retain(|_, f| !f.variable_names.is_empty());
                             variables.clear();
                             println!("Variables cleared");
                             println!();
                         },
                         "clear functions" => {
+                            if let Some(helper) = rl.helper_mut() {
+                                clear_hinter(helper, functions.iter().filter(|(_, f)| !f.variable_names.is_empty()).map(|(name, _)| name.value()));
+                            }
                             functions.retain(|_, f| f.variable_names.is_empty());
                             println!("Custom functions cleared");
                             println!();
@@ -481,16 +583,23 @@ fn main() {
                                 println!("Removed variable \"{}\"", name);
                                 println!();
                             } else if let Some(f) = functions.remove(name) {
+                                if let Some(helper) = rl.helper_mut() {
+                                    clear_hinter(helper, std::iter::once(name));
+                                }
                                 if f.variable_names.is_empty() {
                                     println!("Removed variable \"{}\"", name);
                                 } else {
                                     println!("Removed function \"{}\"", name);
                                 }
                                 println!();
+                            } else {
+                                println!("Unknown variable or function \"{}\"", name);
+                                println!();
                             }
                         },
                         _ => {
-                            process_input(input, &mut variables, &mut functions);
+                            let helper = |hint| if let Some(helper) = rl.helper_mut() { helper.hints.insert(hint); };
+                            process_input(input, &mut variables, &mut functions, helper);
                         }
                     }
                 },
@@ -504,7 +613,7 @@ fn main() {
     } else {
         for input in inputs {
             println!("Evaluating Expression: {}", input);
-            process_input(input, &mut variables, &mut functions);
+            process_input(input, &mut variables, &mut functions, |_| {});
         }
     }
 }
