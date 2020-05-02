@@ -9,11 +9,11 @@ use joinery::*;
 use std::{
     collections::HashMap,
     rc::Rc,
+    io::Write,
 };
 
 mod whitespace;
 use whitespace::*;
-use std::io::Write;
 
 #[derive(Debug)]
 enum Operator {
@@ -125,7 +125,7 @@ fn parse_operations(input: &[Span]) -> Vec<Operation> {
                 "sqrt"      => OperationType::Builtin(Operator::Sqrt),
                 "d2rad"     => OperationType::Builtin(Operator::D2Rad),
                 "r2deg"     => OperationType::Builtin(Operator::R2Deg),
-                "round"       => OperationType::Builtin(Operator::Rnd),
+                "round"     => OperationType::Builtin(Operator::Rnd),
 
                 "log"       => OperationType::Builtin(Operator::Log),
 
@@ -149,7 +149,7 @@ fn parse_operations(input: &[Span]) -> Vec<Operation> {
 
                 "sum"       => OperationType::Builtin(Operator::Sum),
                 "prod"      => OperationType::Builtin(Operator::Product),
-                _ => OperationType::CustomFunction(part.clone()),
+                _           => OperationType::CustomFunction(part.clone()),
             }
         };
 
@@ -246,7 +246,7 @@ fn evaluate_operations(
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
                 } else {
-                    let mut sum = 0.0;
+                    let mut sum = 1.0;
                     while let Some(r) = stack.pop() {
                         sum *= r;
                     }
@@ -326,8 +326,6 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
             let expr = &expr[1..];
             let name = var.last().unwrap();
 
-            println!("Defining function: {}", input);
-            println!();
             let variable_names: Vec<Span> = var.iter().cloned().take(var.len()-1).collect();
             let body = parse_operations(expr);
 
@@ -338,11 +336,29 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
                 fun_vars.insert(variable_name.value(), 1.0);
             }
 
-            if let Err((span, e)) = evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
-                print_error(span, e);
-            } else {
-                functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
-            }
+            match evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
+                Err((span, e)) => { print_error(span, e); },
+                Ok(res) if variable_names.is_empty() => {
+                    println!("Defining variable: {}", input);
+                    println!();
+
+                    let body_start = expr[0].start();
+                    let mut body_span = total_span.clone();
+                    body_span.set_start(body_start);
+
+                    functions.insert(name.clone(), CustomFunction {
+                        span: total_span.clone(),
+                        body: vec![Operation {
+                            op_type: OperationType::Number(res),
+                            span: body_span }],
+                        variable_names});
+                },
+                Ok(_) => {
+                    println!("Defining function: {}", input);
+                    println!();
+                    functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
+                }
+            };
         },
         None => {
             println!("Evaluating Expression: {}", input);
@@ -376,12 +392,38 @@ fn print_functions(functions: &HashMap<Span, CustomFunction>) {
         let mut tw = TabWriter::new(stdout);
         let _ = writeln!(&mut tw, "Name\tArgs\tBody");
 
-        for (name, fun) in functions {
+        for (name, fun) in functions.iter().filter(|(_, f)| !f.variable_names.is_empty()) {
             let _ = write!(&mut tw, "{}", name.value());
             let _ = write!(&mut tw, "\t{}", fun.variable_names.iter().map(|s| s.value()).join_with(", "));
 
             let body = fun.body[0].span.start();
 
+            let _ = writeln!(&mut tw, "\t{}", &fun.body[0].span.input()[body..]);
+        }
+
+        let _ = tw.flush();
+    }
+
+    println!()
+}
+
+fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<Span, CustomFunction>) {
+    if functions.is_empty() && variables.is_empty() {
+        println!("No variables defined");
+    } else {
+        println!("-- Variables --");
+        let stdout = std::io::stdout();
+        let mut tw = TabWriter::new(stdout);
+        let _ = writeln!(&mut tw, "Name\tValue");
+
+        for (name, value) in variables {
+            let _ = writeln!(&mut tw, "{}\t{}", name, value);
+        }
+
+        for (name, fun) in functions.iter().filter(|(_, f)| f.variable_names.is_empty()) {
+            let _ = write!(&mut tw, "{}", name.value());
+
+            let body = fun.body[0].span.start();
             let _ = writeln!(&mut tw, "\t{}", &fun.body[0].span.input()[body..]);
         }
 
@@ -399,7 +441,7 @@ fn main() {
 
     if inputs.is_empty() {
         println!("Postfix Calculator");
-        println!("type \"help\" or \"functions\" for more information.");
+        println!("type \"help\", \"functions\", or \"variables\" for more information.");
 
         let mut rl = Editor::<()>::new();
         loop {
@@ -410,6 +452,7 @@ fn main() {
                     match &*input {
                         "help" => print_help(),
                         "functions" => print_functions(&functions),
+                        "variables" => print_variables(&variables, &functions),
                         _ => {
                             process_input(input, &mut variables, &mut functions);
                         }

@@ -55,6 +55,12 @@ impl Span {
         self.start
     }
 
+    pub fn set_start(&mut self, start: usize) {
+        assert!(start < self.len);
+        self.start += start;
+        self.len -= start;
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
