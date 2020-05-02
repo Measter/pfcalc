@@ -383,7 +383,7 @@ fn print_help() {
 }
 
 fn print_functions(functions: &HashMap<Span, CustomFunction>) {
-    if functions.is_empty() {
+    if !functions.iter().any(|(_, f)| !f.variable_names.is_empty()) {
         println!("No custom functions defined");
     } else {
         println!("-- Custom Functions --");
@@ -407,7 +407,7 @@ fn print_functions(functions: &HashMap<Span, CustomFunction>) {
 }
 
 fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<Span, CustomFunction>) {
-    if functions.is_empty() && variables.is_empty() {
+    if variables.is_empty() && !functions.iter().any(|(_, f)| f.variable_names.is_empty()) {
         println!("No variables defined");
     } else {
         println!("-- Variables --");
@@ -448,10 +448,31 @@ fn main() {
             match line {
                 Ok(input) => {
                     rl.add_history_entry(&input);
-                    match &*input {
+                    match input.trim() {
                         "help" => print_help(),
                         "functions" => print_functions(&functions),
                         "variables" => print_variables(&variables, &functions),
+                        "clear variables" => {
+                            functions.retain(|_, f| !f.variable_names.is_empty());
+                            println!("Variables cleared");
+                            println!();
+                        },
+                        "clear functions" => {
+                            functions.retain(|_, f| f.variable_names.is_empty());
+                            println!("Custom functions cleared");
+                            println!();
+                        },
+                        _ if input.starts_with("remove ") => {
+                            let name = input.trim_start_matches("remove ");
+                            if let Some(f) = functions.remove(name) {
+                                if f.variable_names.is_empty() {
+                                    println!("Removed variable \"{}\"", name);
+                                } else {
+                                    println!("Removed function \"{}\"", name);
+                                }
+                                println!();
+                            }
+                        },
                         _ => {
                             process_input(input, &mut variables, &mut functions);
                         }
