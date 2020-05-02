@@ -378,7 +378,18 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
 }
 
 fn print_help() {
-    println!("Help");
+    println!("-- Commands --");
+
+    let stdout = std::io::stdout();
+    let mut tw = TabWriter::new(stdout).padding(1);
+    let _ = writeln!(&mut tw, "{}\t{}", "functions",        "List all custom defined functions");
+    let _ = writeln!(&mut tw, "{}\t{}", "variables",        "List all defined variables");
+    let _ = writeln!(&mut tw, "{}\t{}", "clear functions",  "Remove all custom defined functions");
+    let _ = writeln!(&mut tw, "{}\t{}", "clear variables",  "Remove all defined variables");
+    let _ = writeln!(&mut tw, "{}\t{}", "remove <name>",    "Remove a variable or custom function by name");
+
+    let _ = tw.flush();
+
     println!();
 }
 
@@ -440,7 +451,7 @@ fn main() {
 
     if inputs.is_empty() {
         println!("Postfix Calculator");
-        println!("type \"help\", \"functions\", or \"variables\" for more information.");
+        println!("type \"help\" for more information.");
 
         let mut rl = Editor::<()>::new();
         loop {
@@ -454,6 +465,7 @@ fn main() {
                         "variables" => print_variables(&variables, &functions),
                         "clear variables" => {
                             functions.retain(|_, f| !f.variable_names.is_empty());
+                            variables.clear();
                             println!("Variables cleared");
                             println!();
                         },
@@ -464,7 +476,11 @@ fn main() {
                         },
                         _ if input.starts_with("remove ") => {
                             let name = input.trim_start_matches("remove ");
-                            if let Some(f) = functions.remove(name) {
+                            if name == "ans" {
+                                variables.clear();
+                                println!("Removed variable \"{}\"", name);
+                                println!();
+                            } else if let Some(f) = functions.remove(name) {
                                 if f.variable_names.is_empty() {
                                     println!("Removed variable \"{}\"", name);
                                 } else {
