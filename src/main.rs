@@ -339,7 +339,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
             match evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
                 Err((span, e)) => { print_error(span, e); },
                 Ok(res) if variable_names.is_empty() => {
-                    println!("Defining variable: {}", input);
+                    println!("Variable defined: {}", input);
                     println!();
 
                     let body_start = expr[0].start();
@@ -354,14 +354,13 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
                         variable_names});
                 },
                 Ok(_) => {
-                    println!("Defining function: {}", input);
+                    println!("Function defined: {}", input);
                     println!();
                     functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
                 }
             };
         },
         None => {
-            println!("Evaluating Expression: {}", input);
             let ops = parse_operations(&parts);
             let result = evaluate_operations(&ops, &variables, &functions, total_span);
 
@@ -389,16 +388,16 @@ fn print_functions(functions: &HashMap<Span, CustomFunction>) {
     } else {
         println!("-- Custom Functions --");
         let stdout = std::io::stdout();
-        let mut tw = TabWriter::new(stdout);
-        let _ = writeln!(&mut tw, "Name\tArgs\tBody");
+        let mut tw = TabWriter::new(stdout).padding(1);
+        let _ = writeln!(&mut tw, "Name\t|\tArgs\t|\tBody");
 
         for (name, fun) in functions.iter().filter(|(_, f)| !f.variable_names.is_empty()) {
             let _ = write!(&mut tw, "{}", name.value());
-            let _ = write!(&mut tw, "\t{}", fun.variable_names.iter().map(|s| s.value()).join_with(", "));
+            let _ = write!(&mut tw, "\t|\t{}", fun.variable_names.iter().map(|s| s.value()).join_with(", "));
 
             let body = fun.body[0].span.start();
 
-            let _ = writeln!(&mut tw, "\t{}", &fun.body[0].span.input()[body..]);
+            let _ = writeln!(&mut tw, "\t|\t{}", &fun.body[0].span.input()[body..]);
         }
 
         let _ = tw.flush();
@@ -413,18 +412,18 @@ fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<Span, Cus
     } else {
         println!("-- Variables --");
         let stdout = std::io::stdout();
-        let mut tw = TabWriter::new(stdout);
-        let _ = writeln!(&mut tw, "Name\tValue");
+        let mut tw = TabWriter::new(stdout).padding(1);
+        let _ = writeln!(&mut tw, "Name\t|\tValue");
 
         for (name, value) in variables {
-            let _ = writeln!(&mut tw, "{}\t{}", name, value);
+            let _ = writeln!(&mut tw, "{}\t|\t{}", name, value);
         }
 
         for (name, fun) in functions.iter().filter(|(_, f)| f.variable_names.is_empty()) {
             let _ = write!(&mut tw, "{}", name.value());
 
             let body = fun.body[0].span.start();
-            let _ = writeln!(&mut tw, "\t{}", &fun.body[0].span.input()[body..]);
+            let _ = writeln!(&mut tw, "\t|\t{}", &fun.body[0].span.input()[body..]);
         }
 
         let _ = tw.flush();
@@ -467,6 +466,7 @@ fn main() {
         }
     } else {
         for input in inputs {
+            println!("Evaluating Expression: {}", input);
             process_input(input, &mut variables, &mut functions);
         }
     }
