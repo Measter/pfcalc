@@ -21,48 +21,50 @@ mod whitespace;
 use whitespace::*;
 
 struct AutoCompleter {
+    builtins: HashSet<String>,
     hints: HashSet<String>,
 }
 
 impl AutoCompleter {
     fn new() -> Self {
-        let mut hints = HashSet::new();
-        hints.insert("functions".into());
-        hints.insert("variables".into());
-        hints.insert("clear functions".into());
-        hints.insert("clear variables".into());
-        hints.insert("remove".into());
-        hints.insert("abs".into());
-        hints.insert("ceil".into());
-        hints.insert("floor".into());
-        hints.insert("exp".into());
-        hints.insert("ln".into());
-        hints.insert("log10".into());
-        hints.insert("sqrt".into());
-        hints.insert("d2rad".into());
-        hints.insert("r2deg".into());
-        hints.insert("round".into());
-        hints.insert("log".into());
-        hints.insert("cos".into());
-        hints.insert("cosh".into());
-        hints.insert("acos".into());
-        hints.insert("acosh".into());
-        hints.insert("sin".into());
-        hints.insert("asin".into());
-        hints.insert("sinh".into());
-        hints.insert("asinh".into());
-        hints.insert("tan".into());
-        hints.insert("tanh".into());
-        hints.insert("atan".into());
-        hints.insert("atanh".into());
-        hints.insert("atan2".into());
-        hints.insert("pi".into());
-        hints.insert("e".into());
-        hints.insert("sum".into());
-        hints.insert("prod".into());
+        let mut builtins = HashSet::new();
+        builtins.insert("functions".into());
+        builtins.insert("variables".into());
+        builtins.insert("clear functions".into());
+        builtins.insert("clear variables".into());
+        builtins.insert("remove".into());
+        builtins.insert("abs".into());
+        builtins.insert("ceil".into());
+        builtins.insert("floor".into());
+        builtins.insert("exp".into());
+        builtins.insert("ln".into());
+        builtins.insert("log10".into());
+        builtins.insert("sqrt".into());
+        builtins.insert("d2rad".into());
+        builtins.insert("r2deg".into());
+        builtins.insert("round".into());
+        builtins.insert("log".into());
+        builtins.insert("cos".into());
+        builtins.insert("cosh".into());
+        builtins.insert("acos".into());
+        builtins.insert("acosh".into());
+        builtins.insert("sin".into());
+        builtins.insert("asin".into());
+        builtins.insert("sinh".into());
+        builtins.insert("asinh".into());
+        builtins.insert("tan".into());
+        builtins.insert("tanh".into());
+        builtins.insert("atan".into());
+        builtins.insert("atanh".into());
+        builtins.insert("atan2".into());
+        builtins.insert("pi".into());
+        builtins.insert("e".into());
+        builtins.insert("sum".into());
+        builtins.insert("prod".into());
         
         Self {
-            hints
+            builtins,
+            hints: HashSet::new(),
         }
     }
 }
@@ -81,7 +83,8 @@ impl Hinter for AutoCompleter {
             .map(|(idx, _)| ( pos - (idx+1), &line[idx+1..]))
             .unwrap_or((pos, line));
 
-        self.hints.iter()
+        let finder = |map: &HashSet<String>| {
+            map.iter()
             .filter_map(|hint| {
                 if hint.starts_with(&line[..pos]) {
                     Some(hint[pos..].into())
@@ -90,6 +93,9 @@ impl Hinter for AutoCompleter {
                 }
             })
             .next()
+        };
+
+        finder(&self.builtins).or_else(|| finder(&self.hints))
     }
 }
 impl Highlighter for AutoCompleter {
