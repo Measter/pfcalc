@@ -32,6 +32,12 @@ impl AutoCompleter {
         builtins.insert("variables".into());
         builtins.insert("clear functions".into());
         builtins.insert("clear variables".into());
+        builtins.insert("add".into());
+        builtins.insert("sub".into());
+        builtins.insert("mul".into());
+        builtins.insert("div".into());
+        builtins.insert("pow".into());
+        builtins.insert("rem".into());
         builtins.insert("remove".into());
         builtins.insert("abs".into());
         builtins.insert("ceil".into());
@@ -201,12 +207,12 @@ fn parse_operations(input: &[Span]) -> Vec<Operation> {
             OperationType::Number(num)
         } else {
             match part.value() {
-                "+"         => OperationType::Builtin(Operator::Add),
-                "-"         => OperationType::Builtin(Operator::Sub),
-                "*"         => OperationType::Builtin(Operator::Mul),
-                "/"         => OperationType::Builtin(Operator::Div),
-                "^"         => OperationType::Builtin(Operator::Pow),
-                "%"         => OperationType::Builtin(Operator::Mod),
+                "+" | "add" => OperationType::Builtin(Operator::Add),
+                "-" | "sub" => OperationType::Builtin(Operator::Sub),
+                "*" | "mul" => OperationType::Builtin(Operator::Mul),
+                "/" | "div" => OperationType::Builtin(Operator::Div),
+                "^" | "pow" => OperationType::Builtin(Operator::Pow),
+                "%" | "rem" => OperationType::Builtin(Operator::Mod),
 
                 "abs"       => OperationType::Builtin(Operator::Abs),
                 "ceil"      => OperationType::Builtin(Operator::Ceil),
@@ -481,7 +487,18 @@ fn print_help() {
     let _ = writeln!(&mut tw, "{}\t{}", "clear functions",  "Remove all custom defined functions");
     let _ = writeln!(&mut tw, "{}\t{}", "clear variables",  "Remove all defined variables");
     let _ = writeln!(&mut tw, "{}\t{}", "remove <name>",    "Remove a variable or custom function by name");
+    let _ = tw.flush();
 
+    println!();
+
+    println!("-- Built in Functions --");
+
+    let _ = writeln!(&mut tw, "{}", ["+(add)","-(sub)","*(mul)","/(div)","^(pow)","%(rem)"].iter().join_with("\t"));
+    let _ = writeln!(&mut tw, "{}", ["abs","ceil","floor","exp","ln","log10"].iter().join_with("\t"));
+    let _ = writeln!(&mut tw, "{}", ["log", "sqrt", "d2rad", "r2deg", "round", "cos"].iter().join_with("\t"));
+    let _ = writeln!(&mut tw, "{}", ["cosh", "acos", "acosh", "sin", "sinh", "asin"].iter().join_with("\t"));
+    let _ = writeln!(&mut tw, "{}", ["asinh", "tan", "tanh", "atan", "atanh", "atan2"].iter().join_with("\t"));
+    let _ = writeln!(&mut tw, "{}", ["sum", "prod", "pi", "e", "", ""].iter().join_with("\t"));
     let _ = tw.flush();
 
     println!();
