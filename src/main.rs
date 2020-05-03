@@ -86,7 +86,7 @@ impl Completer for AutoCompleter {
         // Find the last entered token after a whitespace
         let (start_pos, line) = line.rmatch_indices(" ").next()
             .map(|(idx, _)| (idx+1, &line[idx+1..]))
-            .unwrap_or((pos - 2, line));
+            .unwrap_or((pos - 1, line));
         
         let mut matches: Vec<_> = self.builtins.iter()
             .filter(|f| f.starts_with(line))
