@@ -77,6 +77,28 @@ impl AutoCompleter {
 
 impl Completer for AutoCompleter {
     type Candidate = String;
+
+    fn complete(&self, line: &str, pos: usize, _: &Context<'_>) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
+        if pos < line.len() || line.is_empty() || line.ends_with(" ") {
+            return Ok((pos, Vec::new()));
+        }
+
+        // Find the last entered token after a whitespace
+        let (start_pos, line) = line.rmatch_indices(" ").next()
+            .map(|(idx, _)| (idx+1, &line[idx+1..]))
+            .unwrap_or((pos - 2, line));
+        
+        let mut matches: Vec<_> = self.builtins.iter()
+            .filter(|f| f.starts_with(line))
+            .chain(self.hints.iter()
+                .filter(|f| f.starts_with(line))
+            )
+            .cloned()
+            .collect();
+        matches.sort();
+
+        Ok((start_pos, matches))
+    }
 }
 impl Hinter for AutoCompleter {
     fn hint(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Option<String> {
