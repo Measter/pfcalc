@@ -11,7 +11,7 @@ use tabwriter::TabWriter;
 use joinery::*;
 
 use std::{
-    collections::{HashSet, HashMap},
+    collections::{BTreeSet, HashMap},
     rc::Rc,
     io::Write,
     borrow::Cow,
@@ -21,13 +21,13 @@ mod whitespace;
 use whitespace::*;
 
 struct AutoCompleter {
-    builtins: HashSet<String>,
-    hints: HashSet<String>,
+    builtins: BTreeSet<String>,
+    hints: BTreeSet<String>,
 }
 
 impl AutoCompleter {
     fn new() -> Self {
-        let mut builtins = HashSet::new();
+        let mut builtins = BTreeSet::new();
         builtins.insert("functions".into());
         builtins.insert("variables".into());
         builtins.insert("clear functions".into());
@@ -70,7 +70,7 @@ impl AutoCompleter {
         
         Self {
             builtins,
-            hints: HashSet::new(),
+            hints: BTreeSet::new(),
         }
     }
 }
@@ -111,7 +111,7 @@ impl Hinter for AutoCompleter {
             .map(|(idx, _)| ( pos - (idx+1), &line[idx+1..]))
             .unwrap_or((pos, line));
 
-        let finder = |map: &HashSet<String>| {
+        let finder = |map: &BTreeSet<String>| {
             map.iter()
             .filter_map(|hint| {
                 if hint.starts_with(&line[..pos]) {
