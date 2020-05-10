@@ -1,8 +1,6 @@
 use std::{
     rc::Rc,
-    hash::{Hash, Hasher},
-    cmp::{Eq, PartialEq},
-    borrow::Borrow,
+    ops::Deref,
 };
 
 #[derive(Debug, Clone)]
@@ -12,24 +10,14 @@ pub struct Span {
     len: usize
 }
 
-impl Hash for Span {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.value().hash(state)
+impl Deref for Span {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        let start = self.start;
+        let end = start + self.len;
+        &self.input[start..end]
     }
-}
-
-impl PartialEq for Span {
-    fn eq(&self, rhs: &Self) -> bool {
-        self.value() == rhs.value()
-    }
-}
-
-impl Eq for Span {}
-
-impl Borrow<str> for Span {
-    fn borrow(&self) -> &str {
-        self.value()
-    }
+    
 }
 
 impl Span {
@@ -39,12 +27,6 @@ impl Span {
             len: input.len(),
             input,
         }
-    }
-
-    pub fn value(&self) -> &str {
-        let start = self.start;
-        let end = start + self.len;
-        &self.input[start..end]
     }
 
     pub fn input(&self) -> &str {

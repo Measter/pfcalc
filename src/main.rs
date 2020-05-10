@@ -225,10 +225,10 @@ fn parse_operations(input: impl Iterator<Item=Span>) -> Vec<Operation> {
     let mut ops = Vec::new();
 
     for part in input {
-        let operation = if let Ok(num) = part.value().parse() {
+        let operation = if let Ok(num) = part.parse() {
             OperationType::Number(num)
         } else {
-            match part.value() {
+            match &*part {
                 "+" | "add" => OperationType::Builtin(Operator::Add),
                 "-" | "sub" => OperationType::Builtin(Operator::Sub),
                 "*" | "mul" => OperationType::Builtin(Operator::Mul),
@@ -302,7 +302,7 @@ fn apply_bi_func(stack: &mut Vec<f64>, f: impl Fn(f64, f64) -> f64) -> Result<()
 fn evaluate_operations(
     ops: &[Operation],
     variables: &HashMap<&str, f64>,
-    functions: &HashMap<Span, CustomFunction>,
+    functions: &HashMap<String, CustomFunction>,
     total_span: Span
 ) -> Result<f64, (Span, ErrorKind)>
 {
@@ -384,7 +384,7 @@ fn evaluate_operations(
                 Ok(())
             },
             OperationType::CustomFunction(name) => {
-                let var = name.value();
+                let var = &**name;
                 match (variables.get(var), functions.get(var)) {
                     (Some(var), _) => {
                         stack.push(*var);
@@ -395,7 +395,7 @@ fn evaluate_operations(
 
                         for variable_name in fun.variable_names.iter().rev() {
                             let val = stack.pop().ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
-                            fun_vars.insert(variable_name.value(), val);
+                            fun_vars.insert(&*variable_name, val);
                         }
 
                         let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span.clone())?;
@@ -427,7 +427,7 @@ fn starts_with_digit(input: &str) -> bool {
     input.chars().next().filter(char::is_ascii_digit).is_some()
 }
 
-fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &mut HashMap<Span, CustomFunction>, mut insert_hint: impl FnMut(String)) {
+fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &mut HashMap<String, CustomFunction>, mut insert_hint: impl FnMut(String)) {
     let input: Rc<str> = input.into_boxed_str().into();
 
     let total_span = Span::new(Rc::clone(&input));
@@ -437,9 +437,9 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
     if input.contains(" = ") {
         // A function definition.
         let mut variable_names = Vec::new();
-        variable_names.extend((&mut parts).take_while(|p| p.value() != "=") );
+        variable_names.extend((&mut parts).take_while(|p| &**p != "=") );
 
-        if variable_names.is_empty() || variable_names.iter().any(|v| starts_with_digit(v.value())) {
+        if variable_names.is_empty() || variable_names.iter().any(|v| starts_with_digit(v)) {
             print_error(total_span, ErrorKind::InvalidVariableOrFunction);
             return;
         }
@@ -460,7 +460,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
         // We don't need the result, just to evaluate to see if it fails.
         let mut fun_vars = variables.clone();
         for variable_name in variable_names.iter().rev() {
-            fun_vars.insert(variable_name.value(), 1.0);
+            fun_vars.insert(variable_name, 1.0);
         }
 
         match evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
@@ -472,8 +472,8 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
                 let mut body_span = total_span.clone();
                 body_span.set_start(body_start);
 
-                insert_hint(name.value().into());
-                functions.insert(name.clone(), CustomFunction {
+                insert_hint((*name).to_owned());
+                functions.insert((*name).to_owned(), CustomFunction {
                     span: total_span.clone(),
                     body: vec![Operation {
                         op_type: OperationType::Number(res),
@@ -483,8 +483,8 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
             Ok(_) => {
                 println!("Function defined: {}", input);
                 println!();
-                insert_hint(name.value().into());
-                functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
+                insert_hint((*name).to_owned());
+                functions.insert((*name).to_owned(), CustomFunction { span: total_span.clone(), body, variable_names });
             }
         };
     } else {
@@ -531,7 +531,7 @@ fn print_help() {
     println!();
 }
 
-fn print_functions(functions: &HashMap<Span, CustomFunction>) {
+fn print_functions(functions: &HashMap<String, CustomFunction>) {
     if !functions.iter().any(|(_, f)| !f.variable_names.is_empty()) {
         println!("No custom functions defined");
     } else {
@@ -541,8 +541,8 @@ fn print_functions(functions: &HashMap<Span, CustomFunction>) {
         let _ = writeln!(&mut tw, "Name\t|\tArgs\t|\tBody");
 
         for (name, fun) in functions.iter().filter(|(_, f)| !f.variable_names.is_empty()) {
-            let _ = write!(&mut tw, "{}", name.value());
-            let _ = write!(&mut tw, "\t|\t{}", fun.variable_names.iter().map(|s| s.value()).join_with(", "));
+            let _ = write!(&mut tw, "{}", &**name);
+            let _ = write!(&mut tw, "\t|\t{}", fun.variable_names.iter().map(|s| &**s).join_with(", "));
 
             let body = fun.body[0].span.start();
 
@@ -555,7 +555,7 @@ fn print_functions(functions: &HashMap<Span, CustomFunction>) {
     println!()
 }
 
-fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<Span, CustomFunction>) {
+fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<String, CustomFunction>) {
     if variables.is_empty() && !functions.iter().any(|(_, f)| f.variable_names.is_empty()) {
         println!("No variables defined");
     } else {
@@ -569,7 +569,7 @@ fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<Span, Cus
         }
 
         for (name, fun) in functions.iter().filter(|(_, f)| f.variable_names.is_empty()) {
-            let _ = write!(&mut tw, "{}", name.value());
+            let _ = write!(&mut tw, "{}", &**name);
 
             let body = fun.body[0].span.start();
             let _ = writeln!(&mut tw, "\t|\t{}", &fun.body[0].span.input()[body..]);
@@ -611,7 +611,7 @@ fn main() {
                         "variables" => print_variables(&variables, &functions),
                         "clear variables" => {
                             if let Some(helper) = rl.helper_mut() {
-                                clear_hinter(helper, functions.iter().filter(|(_, f)| f.variable_names.is_empty()).map(|(name, _)| name.value()));
+                                clear_hinter(helper, functions.iter().filter(|(_, f)| f.variable_names.is_empty()).map(|(name, _)| &**name));
                             }
                             functions.retain(|_, f| !f.variable_names.is_empty());
                             variables.clear();
@@ -620,7 +620,7 @@ fn main() {
                         },
                         "clear functions" => {
                             if let Some(helper) = rl.helper_mut() {
-                                clear_hinter(helper, functions.iter().filter(|(_, f)| !f.variable_names.is_empty()).map(|(name, _)| name.value()));
+                                clear_hinter(helper, functions.iter().filter(|(_, f)| !f.variable_names.is_empty()).map(|(name, _)| &**name));
                             }
                             functions.retain(|_, f| f.variable_names.is_empty());
                             println!("Custom functions cleared");
