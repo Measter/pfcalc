@@ -66,38 +66,59 @@ impl Span {
     }
 }
 
-pub fn get_parts(input: Rc<str>) -> Vec<Span> {
-    let chars = &mut input.char_indices().peekable();
-    let mut parts = Vec::new();
+#[derive(Copy, Clone)]
+pub struct SplitWhitespaceIndicesIter<'a> {
+    value: &'a str,
+    cur_idx: usize,
+}
 
-    while let Some((idx, c)) = chars.next() {
-        if c.is_whitespace() {
-            continue;
+impl<'a> Iterator for SplitWhitespaceIndicesIter<'a> {
+    type Item = (usize, &'a str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.value.is_empty() {
+            return None;
         }
 
-        let end_idx;
-
-        loop {
-            match chars.peek() {
-                Some((_, c)) if !c.is_whitespace() => {
-                    chars.next();
-                    continue
-                },
-                Some((idx, _)) => end_idx = *idx,
-                // At end of string, just grab the rest.
-                None => end_idx = input.len(),
-            }
-
-            break;
-        }
-
-        let span = Span {
-            input: Rc::clone(&input),
-            start: idx,
-            len: end_idx-idx,
+        let mut chars = self.value.char_indices().skip_while(|(_, c)| c.is_whitespace());
+        let start_idx = if let Some((idx, _)) = chars.next() {
+            idx
+        } else {
+            // End of string.
+            self.value = "";
+            return None;
         };
-        parts.push(span);
-    }
 
-    parts
+        let cur_value = &self.value[start_idx..];
+
+        let end_idx = if let Some(cur_part) = cur_value.split_whitespace().next() {
+            cur_part.len()
+        } else {
+            // End of string, so just grab the rest.
+            cur_value.len()
+        };
+
+        let (ret_str, remainder) = cur_value.split_at(end_idx);
+        let ret_idx = self.cur_idx + start_idx;
+
+        self.value = remainder;
+        self.cur_idx += start_idx + end_idx;
+
+        Some((ret_idx, ret_str))
+    }
+}
+
+pub fn get_spans<'a>(input: &'a Rc<str>) -> impl Iterator<Item=Span> + 'a {
+    let iter = SplitWhitespaceIndicesIter {
+        value: &*input,
+        cur_idx: 0,
+    };
+
+    iter.map(move |(start, st)| {
+        Span {
+            input: Rc::clone(&input),
+            start,
+            len: st.len(),
+        }
+    })
 }

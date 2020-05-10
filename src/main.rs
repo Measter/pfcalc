@@ -221,7 +221,7 @@ struct CustomFunction {
     variable_names: Vec<Span>,
 }
 
-fn parse_operations(input: &[Span]) -> Vec<Operation> {
+fn parse_operations(input: impl Iterator<Item=Span>) -> Vec<Operation> {
     let mut ops = Vec::new();
 
     for part in input {
@@ -431,72 +431,77 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
     let input: Rc<str> = input.into_boxed_str().into();
 
     let total_span = Span::new(Rc::clone(&input));
-    let parts = get_parts(Rc::clone(&input));
-    let split_idx = parts.iter().position(|span| span.value() == "=");
+    let mut parts = get_spans(&input);
 
-    match split_idx {
-        Some(idx) => {
-            let (var, expr) = parts.split_at(idx);
+    // Space to ensure it's a properly delimited chunk.
+    if input.contains(" = ") {
+        // A function definition.
+        let mut variable_names = Vec::new();
+        variable_names.extend((&mut parts).take_while(|p| p.value() != "=") );
 
-            if var.is_empty() || var.iter().any(|v| starts_with_digit(v.value())) {
-                print_error(total_span, ErrorKind::InvalidVariableOrFunction);
-                return;
+        if variable_names.is_empty() || variable_names.iter().any(|v| starts_with_digit(v.value())) {
+            print_error(total_span, ErrorKind::InvalidVariableOrFunction);
+            return;
+        }
+
+        let mut body = parts.peekable();
+        let body_start = if let Some(span) = body.peek() {
+            span.start()
+        } else {
+            // Empty body.
+            print_error(total_span, ErrorKind::InvalidVariableOrFunction);
+            return;
+        };
+
+        let name = variable_names.pop().unwrap();
+        let body = parse_operations(body);
+
+        // Quick test of the function to make sure it works.
+        // We don't need the result, just to evaluate to see if it fails.
+        let mut fun_vars = variables.clone();
+        for variable_name in variable_names.iter().rev() {
+            fun_vars.insert(variable_name.value(), 1.0);
+        }
+
+        match evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
+            Err((span, e)) => { print_error(span, e); },
+            Ok(res) if variable_names.is_empty() => {
+                println!("Variable defined: {}", input);
+                println!();
+
+                let mut body_span = total_span.clone();
+                body_span.set_start(body_start);
+
+                insert_hint(name.value().into());
+                functions.insert(name.clone(), CustomFunction {
+                    span: total_span.clone(),
+                    body: vec![Operation {
+                        op_type: OperationType::Number(res),
+                        span: body_span }],
+                    variable_names});
+            },
+            Ok(_) => {
+                println!("Function defined: {}", input);
+                println!();
+                insert_hint(name.value().into());
+                functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
             }
+        };
+    } else {
+        // Just a regular expression.
+        let ops = parse_operations(parts);
+        let result = evaluate_operations(&ops, &variables, &functions, total_span);
 
-            let expr = &expr[1..];
-            let name = var.last().unwrap();
+        match result {
+            Ok(result) => {
+                variables.insert("ans", result);
 
-            let variable_names: Vec<Span> = var.iter().cloned().take(var.len()-1).collect();
-            let body = parse_operations(expr);
-
-            // Quick test of the function to make sure it works.
-            // We don't need the result, just to evaluate to see if it fails.
-            let mut fun_vars = variables.clone();
-            for variable_name in variable_names.iter().rev() {
-                fun_vars.insert(variable_name.value(), 1.0);
-            }
-
-            match evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
-                Err((span, e)) => { print_error(span, e); },
-                Ok(res) if variable_names.is_empty() => {
-                    println!("Variable defined: {}", input);
-                    println!();
-
-                    let body_start = expr[0].start();
-                    let mut body_span = total_span.clone();
-                    body_span.set_start(body_start);
-
-                    insert_hint(name.value().into());
-                    functions.insert(name.clone(), CustomFunction {
-                        span: total_span.clone(),
-                        body: vec![Operation {
-                            op_type: OperationType::Number(res),
-                            span: body_span }],
-                        variable_names});
-                },
-                Ok(_) => {
-                    println!("Function defined: {}", input);
-                    println!();
-                    insert_hint(name.value().into());
-                    functions.insert(name.clone(), CustomFunction { span: total_span.clone(), body, variable_names });
-                }
-            };
-        },
-        None => {
-            let ops = parse_operations(&parts);
-            let result = evaluate_operations(&ops, &variables, &functions, total_span);
-
-            match result {
-                Ok(result) => {
-                    variables.insert("ans", result);
-
-                    println!("Result: {}", result);
-                    println!();
-                },
-                Err((span, e)) => print_error(span, e),
-            }
-        },
-    };
+                println!("Result: {}", result);
+                println!();
+            },
+            Err((span, e)) => print_error(span, e),
+        }
+    }
 }
 
 fn print_help() {
