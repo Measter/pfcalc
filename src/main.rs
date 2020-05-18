@@ -27,49 +27,25 @@ struct AutoCompleter {
 
 impl AutoCompleter {
     fn new() -> Self {
-        let mut builtins = BTreeSet::new();
-        builtins.insert("functions".into());
-        builtins.insert("variables".into());
-        builtins.insert("clear functions".into());
-        builtins.insert("clear variables".into());
-        builtins.insert("add".into());
-        builtins.insert("sub".into());
-        builtins.insert("mul".into());
-        builtins.insert("div".into());
-        builtins.insert("pow".into());
-        builtins.insert("rem".into());
-        builtins.insert("remove".into());
-        builtins.insert("abs".into());
-        builtins.insert("ceil".into());
-        builtins.insert("floor".into());
-        builtins.insert("exp".into());
-        builtins.insert("ln".into());
-        builtins.insert("log10".into());
-        builtins.insert("sqrt".into());
-        builtins.insert("d2rad".into());
-        builtins.insert("r2deg".into());
-        builtins.insert("round".into());
-        builtins.insert("log".into());
-        builtins.insert("cos".into());
-        builtins.insert("cosh".into());
-        builtins.insert("acos".into());
-        builtins.insert("acosh".into());
-        builtins.insert("sin".into());
-        builtins.insert("asin".into());
-        builtins.insert("sinh".into());
-        builtins.insert("asinh".into());
-        builtins.insert("tan".into());
-        builtins.insert("tanh".into());
-        builtins.insert("atan".into());
-        builtins.insert("atanh".into());
-        builtins.insert("atan2".into());
-        builtins.insert("pi".into());
-        builtins.insert("e".into());
-        builtins.insert("sum".into());
-        builtins.insert("prod".into());
-        
+        let keywords = [
+            "functions", "variables", "clear", "remove",
+            "add", "sub", "mul", "div", "pow", "rem", "sqrt",
+            
+            "abs", "ceil", "floor","round",
+            
+            "exp", "ln", "log10", "log",
+            
+            "d2rad", "r2deg",
+            "cos", "cosh", "acos", "acosh",
+            "sin", "asin", "sinh", "asinh",
+            "tan", "tanh", "atan", "atanh", "atan2",
+            
+            "pi", "e",
+            "sum", "prod"
+        ];
+
         Self {
-            builtins,
+            builtins: keywords.iter().map(|&k| k.to_owned()).collect(),
             hints: BTreeSet::new(),
         }
     }
