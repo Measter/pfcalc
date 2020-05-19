@@ -89,14 +89,14 @@ impl Hinter for AutoCompleter {
 
         let finder = |map: &BTreeSet<String>| {
             map.iter()
-            .filter_map(|hint| {
-                if hint.starts_with(&line[..pos]) {
-                    Some(hint[pos..].into())
-                } else {
-                    None
-                }
-            })
-            .next()
+                .filter_map(|hint| {
+                    if hint.starts_with(&line[..pos]) {
+                        Some(hint[pos..].into())
+                    } else {
+                        None
+                    }
+                })
+                .next()
         };
 
         finder(&self.builtins).or_else(|| finder(&self.hints))
@@ -326,7 +326,7 @@ fn evaluate_operations(
             OperationType::Builtin(Operator::Atanh) => apply_mono_func(&mut stack, &f64::atanh),
             OperationType::Builtin(Operator::Atan2) => apply_bi_func(&mut stack, &f64::atan2),
 
-            OperationType::Builtin(Operator::Sum)   => {
+            OperationType::Builtin(Operator::Sum) => {
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
                 } else {
@@ -338,7 +338,7 @@ fn evaluate_operations(
                     Ok(())
                 }
             },
-            OperationType::Builtin(Operator::Product)   => {
+            OperationType::Builtin(Operator::Product) => {
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
                 } else {
@@ -351,11 +351,11 @@ fn evaluate_operations(
                 }
             },
 
-            OperationType::Builtin(Operator::Pi)    => {
+            OperationType::Builtin(Operator::Pi) => {
                 stack.push(std::f64::consts::PI);
                 Ok(())
             },
-            OperationType::Builtin(Operator::E)     => {
+            OperationType::Builtin(Operator::E) => {
                 stack.push(std::f64::consts::E);
                 Ok(())
             },
@@ -383,7 +383,7 @@ fn evaluate_operations(
             }
         };
 
-        ret.map_err(|e|(op.span.clone(), e))?;
+        ret.map_err(|e| (op.span.clone(), e))?;
     }
 
     if stack.len() != 1 {
