@@ -55,12 +55,12 @@ impl Completer for AutoCompleter {
     type Candidate = String;
 
     fn complete(&self, line: &str, pos: usize, _: &Context<'_>) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        if pos < line.len() || line.is_empty() || line.ends_with(" ") {
+        if pos < line.len() || line.is_empty() || line.ends_with(' ') {
             return Ok((pos, Vec::new()));
         }
 
         // Find the last entered token after a whitespace
-        let (start_pos, line) = line.rmatch_indices(" ").next()
+        let (start_pos, line) = line.rmatch_indices(' ').next()
             .map(|(idx, _)| (idx+1, &line[idx+1..]))
             .unwrap_or((0, line));
         
@@ -78,12 +78,12 @@ impl Completer for AutoCompleter {
 }
 impl Hinter for AutoCompleter {
     fn hint(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Option<String> {
-        if pos < line.len() || line.is_empty() || line.ends_with(" ") {
+        if pos < line.len() || line.is_empty() || line.ends_with(' ') {
             return None;
         }
 
         // Find the last entered token after a whitespace
-        let (pos, line) = line.rmatch_indices(" ").next()
+        let (pos, line) = line.rmatch_indices(' ').next()
             .map(|(idx, _)| ( pos - (idx+1), &line[idx+1..]))
             .unwrap_or((pos, line));
 
@@ -450,7 +450,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
 
                 insert_hint((*name).to_owned());
                 functions.insert((*name).to_owned(), CustomFunction {
-                    span: total_span.clone(),
+                    span: total_span,
                     body: vec![Operation {
                         op_type: OperationType::Number(res),
                         span: body_span }],
@@ -460,7 +460,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
                 println!("Function defined: {}", input);
                 println!();
                 insert_hint((*name).to_owned());
-                functions.insert((*name).to_owned(), CustomFunction { span: total_span.clone(), body, variable_names });
+                functions.insert((*name).to_owned(), CustomFunction { span: total_span, body, variable_names });
             }
         };
     } else {
