@@ -1,13 +1,10 @@
-use std::{
-    rc::Rc,
-    ops::Deref,
-};
+use std::{ops::Deref, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub struct Span {
     input: Rc<str>,
     start: usize,
-    len: usize
+    len: usize,
 }
 
 impl Deref for Span {
@@ -17,7 +14,6 @@ impl Deref for Span {
         let end = start + self.len;
         &self.input[start..end]
     }
-    
 }
 
 impl Span {
@@ -62,7 +58,10 @@ impl<'a> Iterator for SplitWhitespaceIndicesIter<'a> {
             return None;
         }
 
-        let mut chars = self.value.char_indices().skip_while(|(_, c)| c.is_whitespace());
+        let mut chars = self
+            .value
+            .char_indices()
+            .skip_while(|(_, c)| c.is_whitespace());
         let start_idx = if let Some((idx, _)) = chars.next() {
             idx
         } else {
@@ -90,17 +89,15 @@ impl<'a> Iterator for SplitWhitespaceIndicesIter<'a> {
     }
 }
 
-pub fn get_spans<'a>(input: &'a Rc<str>) -> impl Iterator<Item=Span> + 'a {
+pub fn get_spans<'a>(input: &'a Rc<str>) -> impl Iterator<Item = Span> + 'a {
     let iter = SplitWhitespaceIndicesIter {
         value: &*input,
         cur_idx: 0,
     };
 
-    iter.map(move |(start, st)| {
-        Span {
-            input: Rc::clone(&input),
-            start,
-            len: st.len(),
-        }
+    iter.map(move |(start, st)| Span {
+        input: Rc::clone(&input),
+        start,
+        len: st.len(),
     })
 }

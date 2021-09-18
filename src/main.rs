@@ -1,20 +1,16 @@
 use rustyline::{
-    error::ReadlineError,
-    completion::Completer,
-    hint::Hinter,
-    highlight::Highlighter,
-    validate::Validator,
-    Helper, Editor, Context,
+    completion::Completer, error::ReadlineError, highlight::Highlighter, hint::Hinter,
+    validate::Validator, Context, Editor, Helper,
 };
 
-use tabwriter::TabWriter;
 use joinery::*;
+use tabwriter::TabWriter;
 
 use std::{
-    collections::{BTreeSet, HashMap},
-    rc::Rc,
-    io::Write,
     borrow::Cow,
+    collections::{BTreeSet, HashMap},
+    io::Write,
+    rc::Rc,
 };
 
 mod whitespace;
@@ -54,21 +50,28 @@ impl AutoCompleter {
 impl Completer for AutoCompleter {
     type Candidate = String;
 
-    fn complete(&self, line: &str, pos: usize, _: &Context<'_>) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        _: &Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
         if pos < line.len() || line.is_empty() || line.ends_with(' ') {
             return Ok((pos, Vec::new()));
         }
 
         // Find the last entered token after a whitespace
-        let (start_pos, line) = line.rmatch_indices(' ').next()
-            .map(|(idx, _)| (idx+1, &line[idx+1..]))
+        let (start_pos, line) = line
+            .rmatch_indices(' ')
+            .next()
+            .map(|(idx, _)| (idx + 1, &line[idx + 1..]))
             .unwrap_or((0, line));
-        
-        let mut matches: Vec<_> = self.builtins.iter()
+
+        let mut matches: Vec<_> = self
+            .builtins
+            .iter()
             .filter(|f| f.starts_with(line))
-            .chain(self.hints.iter()
-                .filter(|f| f.starts_with(line))
-            )
+            .chain(self.hints.iter().filter(|f| f.starts_with(line)))
             .cloned()
             .collect();
         matches.sort();
@@ -77,14 +80,17 @@ impl Completer for AutoCompleter {
     }
 }
 impl Hinter for AutoCompleter {
+    type Hint = String;
     fn hint(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Option<String> {
         if pos < line.len() || line.is_empty() || line.ends_with(' ') {
             return None;
         }
 
         // Find the last entered token after a whitespace
-        let (pos, line) = line.rmatch_indices(' ').next()
-            .map(|(idx, _)| ( pos - (idx+1), &line[idx+1..]))
+        let (pos, line) = line
+            .rmatch_indices(' ')
+            .next()
+            .map(|(idx, _)| (pos - (idx + 1), &line[idx + 1..]))
             .unwrap_or((pos, line));
 
         let finder = |map: &BTreeSet<String>| {
@@ -109,7 +115,6 @@ impl Highlighter for AutoCompleter {
 }
 impl Validator for AutoCompleter {}
 impl Helper for AutoCompleter {}
-
 
 #[derive(Debug)]
 enum Operator {
@@ -180,7 +185,10 @@ impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use ErrorKind::*;
         match self {
-            InsufficientStack => write!(f, "Attempted to evaluate an operator with insufficient values on stack.")?,
+            InsufficientStack => write!(
+                f,
+                "Attempted to evaluate an operator with insufficient values on stack."
+            )?,
             UnknownFunction => write!(f, "Unknown function or variable.",)?,
             NonEmptyStack => write!(f, "Mismatched numbers and operations.")?,
             InvalidVariableOrFunction => write!(f, "Invalid variable or function definition.")?,
@@ -197,7 +205,7 @@ struct CustomFunction {
     variable_names: Vec<Span>,
 }
 
-fn parse_operations(input: impl Iterator<Item=Span>) -> Vec<Operation> {
+fn parse_operations(input: impl Iterator<Item = Span>) -> Vec<Operation> {
     let mut ops = Vec::new();
 
     for part in input {
@@ -266,7 +274,8 @@ fn apply_mono_func(stack: &mut Vec<f64>, f: impl Fn(f64) -> f64) -> Result<(), E
 }
 
 fn apply_bi_func(stack: &mut Vec<f64>, f: impl Fn(f64, f64) -> f64) -> Result<(), ErrorKind> {
-    let (b, a) = stack.pop()
+    let (b, a) = stack
+        .pop()
         .and_then(|a| stack.pop().map(|b| (a, b)))
         .ok_or(ErrorKind::InsufficientStack)?;
 
@@ -279,9 +288,8 @@ fn evaluate_operations(
     ops: &[Operation],
     variables: &HashMap<&str, f64>,
     functions: &HashMap<String, CustomFunction>,
-    total_span: Span
-) -> Result<f64, (Span, ErrorKind)>
-{
+    total_span: Span,
+) -> Result<f64, (Span, ErrorKind)> {
     let mut stack = Vec::new();
 
     for op in ops {
@@ -337,7 +345,7 @@ fn evaluate_operations(
                     stack.push(sum);
                     Ok(())
                 }
-            },
+            }
             OperationType::Builtin(Operator::Product) => {
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
@@ -349,35 +357,38 @@ fn evaluate_operations(
                     stack.push(sum);
                     Ok(())
                 }
-            },
+            }
 
             OperationType::Builtin(Operator::Pi) => {
                 stack.push(std::f64::consts::PI);
                 Ok(())
-            },
+            }
             OperationType::Builtin(Operator::E) => {
                 stack.push(std::f64::consts::E);
                 Ok(())
-            },
+            }
             OperationType::CustomFunction(name) => {
                 let var = &**name;
                 match (variables.get(var), functions.get(var)) {
                     (Some(var), _) => {
                         stack.push(*var);
                         Ok(())
-                    },
+                    }
                     (None, Some(fun)) => {
                         let mut fun_vars = variables.clone();
 
                         for variable_name in fun.variable_names.iter().rev() {
-                            let val = stack.pop().ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
+                            let val = stack
+                                .pop()
+                                .ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
                             fun_vars.insert(&*variable_name, val);
                         }
 
-                        let result = evaluate_operations(&fun.body, &fun_vars, &functions, fun.span.clone())?;
+                        let result =
+                            evaluate_operations(&fun.body, &fun_vars, functions, fun.span.clone())?;
                         stack.push(result);
                         Ok(())
-                    },
+                    }
                     (None, None) => Err(ErrorKind::UnknownFunction),
                 }
             }
@@ -403,7 +414,12 @@ fn starts_with_digit(input: &str) -> bool {
     input.chars().next().filter(char::is_ascii_digit).is_some()
 }
 
-fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &mut HashMap<String, CustomFunction>, mut insert_hint: impl FnMut(String)) {
+fn process_input(
+    input: String,
+    variables: &mut HashMap<&str, f64>,
+    functions: &mut HashMap<String, CustomFunction>,
+    mut insert_hint: impl FnMut(String),
+) {
     let input: Rc<str> = input.into_boxed_str().into();
 
     let total_span = Span::new(Rc::clone(&input));
@@ -413,7 +429,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
     if input.contains(" = ") {
         // A function definition.
         let mut variable_names = Vec::new();
-        variable_names.extend((&mut parts).take_while(|p| &**p != "=") );
+        variable_names.extend((&mut parts).take_while(|p| &**p != "="));
 
         if variable_names.is_empty() || variable_names.iter().any(|v| starts_with_digit(v)) {
             print_error(total_span, ErrorKind::InvalidVariableOrFunction);
@@ -439,8 +455,10 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
             fun_vars.insert(variable_name, 1.0);
         }
 
-        match evaluate_operations(&body, &fun_vars, &functions, total_span.clone()) {
-            Err((span, e)) => { print_error(span, e); },
+        match evaluate_operations(&body, &fun_vars, functions, total_span.clone()) {
+            Err((span, e)) => {
+                print_error(span, e);
+            }
             Ok(res) if variable_names.is_empty() => {
                 println!("Variable defined: {}", input);
                 println!();
@@ -449,24 +467,36 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
                 body_span.set_start(body_start);
 
                 insert_hint((*name).to_owned());
-                functions.insert((*name).to_owned(), CustomFunction {
-                    span: total_span,
-                    body: vec![Operation {
-                        op_type: OperationType::Number(res),
-                        span: body_span }],
-                    variable_names});
-            },
+                functions.insert(
+                    (*name).to_owned(),
+                    CustomFunction {
+                        span: total_span,
+                        body: vec![Operation {
+                            op_type: OperationType::Number(res),
+                            span: body_span,
+                        }],
+                        variable_names,
+                    },
+                );
+            }
             Ok(_) => {
                 println!("Function defined: {}", input);
                 println!();
                 insert_hint((*name).to_owned());
-                functions.insert((*name).to_owned(), CustomFunction { span: total_span, body, variable_names });
+                functions.insert(
+                    (*name).to_owned(),
+                    CustomFunction {
+                        span: total_span,
+                        body,
+                        variable_names,
+                    },
+                );
             }
         };
     } else {
         // Just a regular expression.
         let ops = parse_operations(parts);
-        let result = evaluate_operations(&ops, &variables, &functions, total_span);
+        let result = evaluate_operations(&ops, variables, functions, total_span);
 
         match result {
             Ok(result) => {
@@ -474,7 +504,7 @@ fn process_input(input: String, variables: &mut HashMap<&str, f64>, functions: &
 
                 println!("Result: {}", result);
                 println!();
-            },
+            }
             Err((span, e)) => print_error(span, e),
         }
     }
@@ -516,9 +546,16 @@ fn print_functions(functions: &HashMap<String, CustomFunction>) {
         let mut tw = TabWriter::new(stdout).padding(1);
         let _ = writeln!(&mut tw, "Name\t|\tArgs\t|\tBody");
 
-        for (name, fun) in functions.iter().filter(|(_, f)| !f.variable_names.is_empty()) {
+        for (name, fun) in functions
+            .iter()
+            .filter(|(_, f)| !f.variable_names.is_empty())
+        {
             let _ = write!(&mut tw, "{}", &**name);
-            let _ = write!(&mut tw, "\t|\t{}", fun.variable_names.iter().map(|s| &**s).join_with(", "));
+            let _ = write!(
+                &mut tw,
+                "\t|\t{}",
+                fun.variable_names.iter().map(|s| &**s).join_with(", ")
+            );
 
             let body = fun.body[0].span.start();
 
@@ -544,7 +581,10 @@ fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<String, C
             let _ = writeln!(&mut tw, "{}\t|\t{}", name, value);
         }
 
-        for (name, fun) in functions.iter().filter(|(_, f)| f.variable_names.is_empty()) {
+        for (name, fun) in functions
+            .iter()
+            .filter(|(_, f)| f.variable_names.is_empty())
+        {
             let _ = write!(&mut tw, "{}", &**name);
 
             let body = fun.body[0].span.start();
@@ -557,7 +597,7 @@ fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<String, C
     println!()
 }
 
-fn clear_hinter<'a> (hinter: &mut AutoCompleter, names: impl Iterator<Item = &'a str>) {
+fn clear_hinter<'a>(hinter: &mut AutoCompleter, names: impl Iterator<Item = &'a str>) {
     for name in names {
         hinter.hints.remove(name);
     }
@@ -587,21 +627,33 @@ fn main() {
                         "variables" => print_variables(&variables, &functions),
                         "clear variables" => {
                             if let Some(helper) = rl.helper_mut() {
-                                clear_hinter(helper, functions.iter().filter(|(_, f)| f.variable_names.is_empty()).map(|(name, _)| &**name));
+                                clear_hinter(
+                                    helper,
+                                    functions
+                                        .iter()
+                                        .filter(|(_, f)| f.variable_names.is_empty())
+                                        .map(|(name, _)| &**name),
+                                );
                             }
                             functions.retain(|_, f| !f.variable_names.is_empty());
                             variables.clear();
                             println!("Variables cleared");
                             println!();
-                        },
+                        }
                         "clear functions" => {
                             if let Some(helper) = rl.helper_mut() {
-                                clear_hinter(helper, functions.iter().filter(|(_, f)| !f.variable_names.is_empty()).map(|(name, _)| &**name));
+                                clear_hinter(
+                                    helper,
+                                    functions
+                                        .iter()
+                                        .filter(|(_, f)| !f.variable_names.is_empty())
+                                        .map(|(name, _)| &**name),
+                                );
                             }
                             functions.retain(|_, f| f.variable_names.is_empty());
                             println!("Custom functions cleared");
                             println!();
-                        },
+                        }
                         _ if input.starts_with("remove ") => {
                             let name = input.trim_start_matches("remove ");
                             if name == "ans" {
@@ -622,13 +674,17 @@ fn main() {
                                 println!("Unknown variable or function \"{}\"", name);
                                 println!();
                             }
-                        },
+                        }
                         _ => {
-                            let helper = |hint| if let Some(helper) = rl.helper_mut() { helper.hints.insert(hint); };
+                            let helper = |hint| {
+                                if let Some(helper) = rl.helper_mut() {
+                                    helper.hints.insert(hint);
+                                }
+                            };
                             process_input(input, &mut variables, &mut functions, helper);
                         }
                     }
-                },
+                }
                 Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
                 Err(e) => {
                     eprintln!("{:?}", e);
