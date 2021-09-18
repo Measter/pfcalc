@@ -1,17 +1,16 @@
-use rustyline::{
-    completion::Completer, error::ReadlineError, highlight::Highlighter, hint::Hinter,
-    validate::Validator, Context, Editor, Helper,
-};
-
-use joinery::*;
-use tabwriter::TabWriter;
-
 use std::{
     borrow::Cow,
     collections::{BTreeSet, HashMap},
     io::Write,
     rc::Rc,
 };
+
+use joinery::*;
+use rustyline::{
+    completion::Completer, error::ReadlineError, highlight::Highlighter, hint::Hinter,
+    validate::Validator, Context, Editor, Helper,
+};
+use tabwriter::TabWriter;
 
 mod whitespace;
 use whitespace::*;
