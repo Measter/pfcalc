@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
 };
 
+use derive_more::Display;
 use joinery::*;
 use rustyline::{
     completion::Completer, error::ReadlineError, highlight::Highlighter, hint::Hinter,
@@ -174,28 +175,16 @@ struct Operation {
     op_type: OperationType,
 }
 
+#[derive(Display)]
 enum ErrorKind {
+    #[display(fmt = "Attempted to evaluate an operator with insufficient values on stack.")]
     InsufficientStack,
+    #[display(fmt = "Unknown function or variable.")]
     UnknownFunction,
+    #[display(fmt = "Mismatched numbers and operations.")]
     NonEmptyStack,
+    #[display(fmt = "Invalid variable or function definition.")]
     InvalidVariableOrFunction,
-}
-
-impl std::fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use ErrorKind::*;
-        match self {
-            InsufficientStack => write!(
-                f,
-                "Attempted to evaluate an operator with insufficient values on stack."
-            )?,
-            UnknownFunction => write!(f, "Unknown function or variable.",)?,
-            NonEmptyStack => write!(f, "Mismatched numbers and operations.")?,
-            InvalidVariableOrFunction => write!(f, "Invalid variable or function definition.")?,
-        }
-
-        Ok(())
-    }
 }
 
 #[derive(Debug)]
