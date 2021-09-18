@@ -22,6 +22,7 @@ struct AutoCompleter {
 
 impl AutoCompleter {
     fn new() -> Self {
+        #[rustfmt::skip]
         let keywords = [
             "functions", "variables", "clear", "remove",
             "add", "sub", "mul", "div", "pow", "rem", "sqrt",
@@ -292,6 +293,7 @@ fn evaluate_operations(
     let mut stack = Vec::new();
 
     for op in ops {
+        #[rustfmt::skip]
         let ret = match &op.op_type {
             OperationType::Number(num) => {
                 stack.push(*num);
