@@ -485,23 +485,23 @@ fn print_help() {
 
     let stdout = std::io::stdout();
     let mut tw = TabWriter::new(stdout).padding(1);
-    let _ = writeln!(&mut tw, "{}\t{}", "functions",        "List all custom defined functions");
-    let _ = writeln!(&mut tw, "{}\t{}", "variables",        "List all defined variables");
-    let _ = writeln!(&mut tw, "{}\t{}", "clear functions",  "Remove all custom defined functions");
-    let _ = writeln!(&mut tw, "{}\t{}", "clear variables",  "Remove all defined variables");
-    let _ = writeln!(&mut tw, "{}\t{}", "remove <name>",    "Remove a variable or custom function by name");
+    let _ = tw.write_all(b"functions\tList all custom defined functions");
+    let _ = tw.write_all(b"variablesriablt all defined variables");
+    let _ = tw.write_all(b"clear functions\tRemove all custom defined functions");
+    let _ = tw.write_all(b"clear variables\tRemove all defined variables");
+    let _ = tw.write_all(b"remove <name>\tRemove a variable or custom function by name");
     let _ = tw.flush();
 
     println!();
 
     println!("-- Built in Functions --");
 
-    let _ = writeln!(&mut tw, "{}", ["+(add)","-(sub)","*(mul)","/(div)","^(pow)","%(rem)"].iter().join_with("\t"));
-    let _ = writeln!(&mut tw, "{}", ["abs","ceil","floor","exp","ln","log10"].iter().join_with("\t"));
-    let _ = writeln!(&mut tw, "{}", ["log", "sqrt", "d2rad", "r2deg", "round", "cos"].iter().join_with("\t"));
-    let _ = writeln!(&mut tw, "{}", ["cosh", "acos", "acosh", "sin", "sinh", "asin"].iter().join_with("\t"));
-    let _ = writeln!(&mut tw, "{}", ["asinh", "tan", "tanh", "atan", "atanh", "atan2"].iter().join_with("\t"));
-    let _ = writeln!(&mut tw, "{}", ["sum", "prod", "pi", "e", "", ""].iter().join_with("\t"));
+    let _ = tw.write_all(b"+(add)\t-(sub)\t*(mul)\t/(div)\t^(pow)\t%(rem)");
+    let _ = tw.write_all(b"abs\tceil\tfloor\texp\tln\tlog10");
+    let _ = tw.write_all(b"log\tsqrt\td2rad\tr2deg\tround\tcos");
+    let _ = tw.write_all(b"cosh\tacos\tacosh\tsin\tsinh\tasin");
+    let _ = tw.write_all(b"asinh\ttan\ttanh\tatan\tatanh\tatan2");
+    let _ = tw.write_all(b"sum\tprod\tpi\te\t\t");
     let _ = tw.flush();
 
     println!();
