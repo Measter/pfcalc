@@ -2,19 +2,21 @@ use std::{
     borrow::Cow,
     collections::{BTreeSet, HashMap},
     io::Write,
+    ops::Range,
     rc::Rc,
 };
 
 use derive_more::Display;
 use joinery::*;
+use lasso::{Rodeo, Spur};
 use rustyline::{
     completion::Completer, error::ReadlineError, highlight::Highlighter, hint::Hinter,
     validate::Validator, Context, Editor, Helper,
 };
 use tabwriter::TabWriter;
 
-mod whitespace;
-use whitespace::*;
+mod lexer;
+use lexer::*;
 
 struct AutoCompleter {
     builtins: BTreeSet<String>,
@@ -27,16 +29,12 @@ impl AutoCompleter {
         let keywords = [
             "functions", "variables", "clear", "remove",
             "add", "sub", "mul", "div", "pow", "rem", "sqrt",
-            
             "abs", "ceil", "floor","round",
-            
             "exp", "ln", "log10", "log",
-            
             "d2rad", "r2deg",
             "cos", "cosh", "acos", "acosh",
             "sin", "asin", "sinh", "asinh",
             "tan", "tanh", "atan", "atanh", "atan2",
-            
             "pi", "e",
             "sum", "prod"
         ];
@@ -109,71 +107,15 @@ impl Hinter for AutoCompleter {
         finder(&self.builtins).or_else(|| finder(&self.hints))
     }
 }
+
 impl Highlighter for AutoCompleter {
     fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
         Cow::Owned("\x1b[90m".to_owned() + hint + "\x1b[0m")
     }
 }
+
 impl Validator for AutoCompleter {}
 impl Helper for AutoCompleter {}
-
-#[derive(Debug)]
-enum Operator {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Pow,
-
-    Abs,
-    Ceil,
-    Floor,
-    Exp,
-    Ln,
-    Log10,
-    Sqrt,
-    D2Rad,
-    R2Deg,
-    Rnd,
-
-    Log,
-
-    Cos,
-    Cosh,
-    ACos,
-    ACosh,
-
-    Sin,
-    Sinh,
-    ASin,
-    ASinh,
-
-    Tan,
-    Tanh,
-    Atan,
-    Atanh,
-    Atan2,
-
-    Sum,
-    Product,
-
-    Pi,
-    E,
-}
-
-#[derive(Debug)]
-enum OperationType {
-    Number(f64),
-    Builtin(Operator),
-    CustomFunction(Span),
-}
-
-#[derive(Debug)]
-struct Operation {
-    span: Span,
-    op_type: OperationType,
-}
 
 #[derive(Display)]
 enum ErrorKind {
@@ -187,72 +129,23 @@ enum ErrorKind {
     InvalidVariableOrFunction,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CustomFunction {
-    span: Span,
+    name: Token,
     body: Vec<Operation>,
-    variable_names: Vec<Span>,
+    body_string: Cow<'static, str>,
+    params: Vec<Token>,
 }
 
-fn parse_operations(input: impl Iterator<Item = Span>) -> Vec<Operation> {
-    let mut ops = Vec::new();
-
-    for part in input {
-        let operation = if let Ok(num) = part.parse() {
-            OperationType::Number(num)
-        } else {
-            match &*part {
-                "+" | "add" => OperationType::Builtin(Operator::Add),
-                "-" | "sub" => OperationType::Builtin(Operator::Sub),
-                "*" | "mul" => OperationType::Builtin(Operator::Mul),
-                "/" | "div" => OperationType::Builtin(Operator::Div),
-                "^" | "pow" => OperationType::Builtin(Operator::Pow),
-                "%" | "rem" => OperationType::Builtin(Operator::Mod),
-
-                "abs"       => OperationType::Builtin(Operator::Abs),
-                "ceil"      => OperationType::Builtin(Operator::Ceil),
-                "floor"     => OperationType::Builtin(Operator::Floor),
-                "exp"       => OperationType::Builtin(Operator::Exp),
-                "ln"        => OperationType::Builtin(Operator::Ln),
-                "log10"     => OperationType::Builtin(Operator::Log10),
-                "sqrt"      => OperationType::Builtin(Operator::Sqrt),
-                "d2rad"     => OperationType::Builtin(Operator::D2Rad),
-                "r2deg"     => OperationType::Builtin(Operator::R2Deg),
-                "round"     => OperationType::Builtin(Operator::Rnd),
-
-                "log"       => OperationType::Builtin(Operator::Log),
-
-                "cos"       => OperationType::Builtin(Operator::Cos),
-                "cosh"      => OperationType::Builtin(Operator::Cosh),
-                "acos"      => OperationType::Builtin(Operator::ACos),
-                "acosh"     => OperationType::Builtin(Operator::ACosh),
-
-                "sin"       => OperationType::Builtin(Operator::Sin),
-                "sinh"      => OperationType::Builtin(Operator::Sinh),
-                "asin"      => OperationType::Builtin(Operator::ASin),
-                "asinh"     => OperationType::Builtin(Operator::ASinh),
-
-                "tan"       => OperationType::Builtin(Operator::Tan),
-                "tanh"      => OperationType::Builtin(Operator::Tanh),
-                "atan"      => OperationType::Builtin(Operator::Atan),
-                "atanh"     => OperationType::Builtin(Operator::Atanh),
-                "atan2"     => OperationType::Builtin(Operator::Atan2),
-                "pi"        => OperationType::Builtin(Operator::Pi),
-                "e"         => OperationType::Builtin(Operator::E),
-
-                "sum"       => OperationType::Builtin(Operator::Sum),
-                "prod"      => OperationType::Builtin(Operator::Product),
-                _           => OperationType::CustomFunction(part.clone()),
-            }
-        };
-
-        ops.push(Operation {
-            span: part.clone(),
-            op_type: operation,
-        });
+impl CustomFunction {
+    fn variable(name: Token, value: f64) -> Self {
+        Self {
+            name,
+            body: vec![Operation::number(value)],
+            body_string: "".into(),
+            params: Vec::new(),
+        }
     }
-
-    ops
 }
 
 fn apply_mono_func(stack: &mut Vec<f64>, f: impl Fn(f64) -> f64) -> Result<(), ErrorKind> {
@@ -275,10 +168,10 @@ fn apply_bi_func(stack: &mut Vec<f64>, f: impl Fn(f64, f64) -> f64) -> Result<()
 
 fn evaluate_operations(
     ops: &[Operation],
-    variables: &HashMap<&str, f64>,
-    functions: &HashMap<String, CustomFunction>,
-    total_span: Span,
-) -> Result<f64, (Span, ErrorKind)> {
+    functions: &HashMap<Spur, Rc<CustomFunction>>,
+    interner: &Rodeo,
+    total_span: Range<usize>,
+) -> Result<f64, (Range<usize>, ErrorKind)> {
     let mut stack = Vec::new();
 
     for op in ops {
@@ -288,43 +181,43 @@ fn evaluate_operations(
                 stack.push(*num);
                 Ok(())
             },
-            OperationType::Builtin(Operator::Add)   => apply_bi_func(&mut stack, |a, b| a + b),
-            OperationType::Builtin(Operator::Sub)   => apply_bi_func(&mut stack, |a, b| a - b),
-            OperationType::Builtin(Operator::Mul)   => apply_bi_func(&mut stack, |a, b| a * b),
-            OperationType::Builtin(Operator::Div)   => apply_bi_func(&mut stack, |a, b| a / b),
-            OperationType::Builtin(Operator::Pow)   => apply_bi_func(&mut stack, &f64::powf),
-            OperationType::Builtin(Operator::Mod)   => apply_bi_func(&mut stack, |a, b| a % b),
+            OperationType::Native(Operator::Add)   => apply_bi_func(&mut stack, |a, b| a + b),
+            OperationType::Native(Operator::Sub)   => apply_bi_func(&mut stack, |a, b| a - b),
+            OperationType::Native(Operator::Mul)   => apply_bi_func(&mut stack, |a, b| a * b),
+            OperationType::Native(Operator::Div)   => apply_bi_func(&mut stack, |a, b| a / b),
+            OperationType::Native(Operator::Pow)   => apply_bi_func(&mut stack, &f64::powf),
+            OperationType::Native(Operator::Mod)   => apply_bi_func(&mut stack, |a, b| a % b),
 
-            OperationType::Builtin(Operator::Abs)   => apply_mono_func(&mut stack, &f64::abs),
-            OperationType::Builtin(Operator::Ceil)  => apply_mono_func(&mut stack, &f64::ceil),
-            OperationType::Builtin(Operator::Floor) => apply_mono_func(&mut stack, &f64::floor),
-            OperationType::Builtin(Operator::Exp)   => apply_mono_func(&mut stack, &f64::exp),
-            OperationType::Builtin(Operator::Ln)    => apply_mono_func(&mut stack, &f64::ln),
-            OperationType::Builtin(Operator::Log10) => apply_mono_func(&mut stack, &f64::log10),
-            OperationType::Builtin(Operator::Sqrt)  => apply_mono_func(&mut stack, &f64::sqrt),
-            OperationType::Builtin(Operator::D2Rad) => apply_mono_func(&mut stack, &f64::to_radians),
-            OperationType::Builtin(Operator::R2Deg) => apply_mono_func(&mut stack, &f64::to_degrees),
-            OperationType::Builtin(Operator::Rnd)   => apply_mono_func(&mut stack, &f64::round),
+            OperationType::Native(Operator::Abs)   => apply_mono_func(&mut stack, &f64::abs),
+            OperationType::Native(Operator::Ceil)  => apply_mono_func(&mut stack, &f64::ceil),
+            OperationType::Native(Operator::Floor) => apply_mono_func(&mut stack, &f64::floor),
+            OperationType::Native(Operator::Exp)   => apply_mono_func(&mut stack, &f64::exp),
+            OperationType::Native(Operator::Ln)    => apply_mono_func(&mut stack, &f64::ln),
+            OperationType::Native(Operator::Log10) => apply_mono_func(&mut stack, &f64::log10),
+            OperationType::Native(Operator::Sqrt)  => apply_mono_func(&mut stack, &f64::sqrt),
+            OperationType::Native(Operator::D2Rad) => apply_mono_func(&mut stack, &f64::to_radians),
+            OperationType::Native(Operator::R2Deg) => apply_mono_func(&mut stack, &f64::to_degrees),
+            OperationType::Native(Operator::Rnd)   => apply_mono_func(&mut stack, &f64::round),
 
-            OperationType::Builtin(Operator::Log)   => apply_bi_func(&mut stack, &f64::log),
+            OperationType::Native(Operator::Log)   => apply_bi_func(&mut stack, &f64::log),
 
-            OperationType::Builtin(Operator::Cos)   => apply_mono_func(&mut stack, &f64::cos),
-            OperationType::Builtin(Operator::Cosh)  => apply_mono_func(&mut stack, &f64::cosh),
-            OperationType::Builtin(Operator::ACos)  => apply_mono_func(&mut stack, &f64::acos),
-            OperationType::Builtin(Operator::ACosh) => apply_mono_func(&mut stack, &f64::acosh),
+            OperationType::Native(Operator::Cos)   => apply_mono_func(&mut stack, &f64::cos),
+            OperationType::Native(Operator::Cosh)  => apply_mono_func(&mut stack, &f64::cosh),
+            OperationType::Native(Operator::ACos)  => apply_mono_func(&mut stack, &f64::acos),
+            OperationType::Native(Operator::ACosh) => apply_mono_func(&mut stack, &f64::acosh),
 
-            OperationType::Builtin(Operator::Sin)   => apply_mono_func(&mut stack, &f64::sin),
-            OperationType::Builtin(Operator::Sinh)  => apply_mono_func(&mut stack, &f64::sinh),
-            OperationType::Builtin(Operator::ASin)  => apply_mono_func(&mut stack, &f64::asin),
-            OperationType::Builtin(Operator::ASinh) => apply_mono_func(&mut stack, &f64::asinh),
+            OperationType::Native(Operator::Sin)   => apply_mono_func(&mut stack, &f64::sin),
+            OperationType::Native(Operator::Sinh)  => apply_mono_func(&mut stack, &f64::sinh),
+            OperationType::Native(Operator::ASin)  => apply_mono_func(&mut stack, &f64::asin),
+            OperationType::Native(Operator::ASinh) => apply_mono_func(&mut stack, &f64::asinh),
 
-            OperationType::Builtin(Operator::Tan)   => apply_mono_func(&mut stack, &f64::tan),
-            OperationType::Builtin(Operator::Tanh)  => apply_mono_func(&mut stack, &f64::tanh),
-            OperationType::Builtin(Operator::Atan)  => apply_mono_func(&mut stack, &f64::atan),
-            OperationType::Builtin(Operator::Atanh) => apply_mono_func(&mut stack, &f64::atanh),
-            OperationType::Builtin(Operator::Atan2) => apply_bi_func(&mut stack, &f64::atan2),
+            OperationType::Native(Operator::Tan)   => apply_mono_func(&mut stack, &f64::tan),
+            OperationType::Native(Operator::Tanh)  => apply_mono_func(&mut stack, &f64::tanh),
+            OperationType::Native(Operator::Atan)  => apply_mono_func(&mut stack, &f64::atan),
+            OperationType::Native(Operator::Atanh) => apply_mono_func(&mut stack, &f64::atanh),
+            OperationType::Native(Operator::Atan2) => apply_bi_func(&mut stack, &f64::atan2),
 
-            OperationType::Builtin(Operator::Sum) => {
+            OperationType::Native(Operator::Sum) => {
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
                 } else {
@@ -336,7 +229,7 @@ fn evaluate_operations(
                     Ok(())
                 }
             }
-            OperationType::Builtin(Operator::Product) => {
+            OperationType::Native(Operator::Product) => {
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
                 } else {
@@ -349,42 +242,33 @@ fn evaluate_operations(
                 }
             }
 
-            OperationType::Builtin(Operator::Pi) => {
+            OperationType::Native(Operator::Pi) => {
                 stack.push(std::f64::consts::PI);
                 Ok(())
             }
-            OperationType::Builtin(Operator::E) => {
+            OperationType::Native(Operator::E) => {
                 stack.push(std::f64::consts::E);
                 Ok(())
             }
-            OperationType::CustomFunction(name) => {
-                let var = &**name;
-                match (variables.get(var), functions.get(var)) {
-                    (Some(var), _) => {
-                        stack.push(*var);
-                        Ok(())
-                    }
-                    (None, Some(fun)) => {
-                        let mut fun_vars = variables.clone();
-
-                        for variable_name in fun.variable_names.iter().rev() {
-                            let val = stack
-                                .pop()
-                                .ok_or((op.span.clone(), ErrorKind::InsufficientStack))?;
-                            fun_vars.insert(&*variable_name, val);
+            OperationType::Custom(name) => {
+                match functions.get(&name.lexeme) {
+                    Some(func) => {
+                        let mut new_functions = functions.clone();
+                        for param in func.params.iter().rev() {
+                            let val = stack.pop().ok_or((param.range(), ErrorKind::InsufficientStack))?;
+                            new_functions.insert(param.lexeme, Rc::new(CustomFunction::variable(*param, val)));
                         }
 
-                        let result =
-                            evaluate_operations(&fun.body, &fun_vars, functions, fun.span.clone())?;
+                        let result = evaluate_operations(&func.body, &new_functions, interner, func.name.range())?;
                         stack.push(result);
                         Ok(())
-                    }
-                    (None, None) => Err(ErrorKind::UnknownFunction),
+                    },
+                    None => Err(ErrorKind::UnknownFunction),
                 }
             }
         };
 
-        ret.map_err(|e| (op.span.clone(), e))?;
+        ret.map_err(|e| (op.token.range(), e))?;
     }
 
     if stack.len() != 1 {
@@ -394,10 +278,16 @@ fn evaluate_operations(
     }
 }
 
-fn print_error(span: Span, err: ErrorKind) {
+fn print_error(input: &str, range: Range<usize>, err: ErrorKind) {
     eprintln!("Error: {}", err);
-    eprintln!("   {}", span.input());
-    eprintln!("   {1:0$}{3:^^2$}", span.start(), "", span.len(), "");
+    eprintln!("   {}", input);
+    eprintln!(
+        "   {1:0$}{3:^^2$}",
+        range.start,
+        "",
+        range.end - range.start,
+        ""
+    );
 }
 
 fn starts_with_digit(input: &str) -> bool {
@@ -405,97 +295,102 @@ fn starts_with_digit(input: &str) -> bool {
 }
 
 fn process_input(
-    input: String,
-    variables: &mut HashMap<&str, f64>,
-    functions: &mut HashMap<String, CustomFunction>,
+    answer_token: Token,
+    input: &str,
+    functions: &mut HashMap<Spur, Rc<CustomFunction>>,
+    interner: &mut Rodeo,
     mut insert_hint: impl FnMut(String),
 ) {
-    let input: Rc<str> = input.into_boxed_str().into();
+    let (operations, body) = lexer::lex_input(input, interner);
+    let total_span = 0..input.len();
 
-    let total_span = Span::new(Rc::clone(&input));
-    let mut parts = get_spans(&input);
-
-    // Space to ensure it's a properly delimited chunk.
-    if input.contains(" = ") {
-        // A function definition.
-        let mut variable_names = Vec::new();
-        variable_names.extend((&mut parts).take_while(|p| &**p != "="));
-
-        if variable_names.is_empty() || variable_names.iter().any(|v| starts_with_digit(v)) {
-            print_error(total_span, ErrorKind::InvalidVariableOrFunction);
-            return;
-        }
-
-        let mut body = parts.peekable();
-        let body_start = if let Some(span) = body.peek() {
-            span.start()
-        } else {
-            // Empty body.
-            print_error(total_span, ErrorKind::InvalidVariableOrFunction);
+    // Having a body means we have a function definition rather than a simple expression.
+    if let Some(body) = body {
+        if body.is_empty() {
+            print_error(input, 0..input.len(), ErrorKind::InvalidVariableOrFunction);
             return;
         };
 
-        let name = variable_names.pop().unwrap();
-        let body = parse_operations(body);
-
-        // Quick test of the function to make sure it works.
-        // We don't need the result, just to evaluate to see if it fails.
-        let mut fun_vars = variables.clone();
-        for variable_name in variable_names.iter().rev() {
-            fun_vars.insert(variable_name, 1.0);
+        let mut parameter_names = operations.into_iter().map(|t| t.token).collect::<Vec<_>>();
+        let all_valid_names = parameter_names.iter().all(|v| {
+            let lexeme = interner.resolve(&v.lexeme);
+            !starts_with_digit(lexeme)
+        });
+        if parameter_names.is_empty() || !all_valid_names {
+            print_error(input, 0..input.len(), ErrorKind::InvalidVariableOrFunction);
+            return;
         }
 
-        match evaluate_operations(&body, &fun_vars, functions, total_span.clone()) {
+        let name = parameter_names.pop().unwrap();
+
+        let mut test_functions = functions.clone();
+        // Quick test of the function to make sure it works.
+        // We don't need the result, just to evaluate to see if it fails.
+        for parameter in parameter_names.iter().rev() {
+            test_functions.insert(
+                parameter.lexeme,
+                Rc::new(CustomFunction::variable(*parameter, 1.0)),
+            );
+        }
+
+        let body_span = body.first().unwrap().token.source_start..input.len();
+        match evaluate_operations(&body, &test_functions, interner, total_span) {
             Err((span, e)) => {
-                print_error(span, e);
+                print_error(input, span, e);
             }
-            Ok(res) if variable_names.is_empty() => {
+            Ok(res) if parameter_names.is_empty() => {
                 println!("Variable defined: {}", input);
                 println!();
 
-                let mut body_span = total_span.clone();
-                body_span.set_start(body_start);
+                let name_lexeme = interner.resolve(&name.lexeme);
 
-                insert_hint((*name).to_owned());
+                insert_hint(name_lexeme.to_owned());
                 functions.insert(
-                    (*name).to_owned(),
-                    CustomFunction {
-                        span: total_span,
-                        body: vec![Operation {
-                            op_type: OperationType::Number(res),
-                            span: body_span,
-                        }],
-                        variable_names,
-                    },
+                    name.lexeme,
+                    Rc::new(CustomFunction {
+                        name,
+                        body: vec![Operation::number(res)],
+                        params: parameter_names,
+                        body_string: input[body_span].to_owned().into(),
+                    }),
                 );
             }
             Ok(_) => {
                 println!("Function defined: {}", input);
                 println!();
-                insert_hint((*name).to_owned());
+                let name_lexeme = interner.resolve(&name.lexeme);
+                insert_hint(name_lexeme.to_owned());
                 functions.insert(
-                    (*name).to_owned(),
-                    CustomFunction {
-                        span: total_span,
+                    name.lexeme,
+                    Rc::new(CustomFunction {
+                        name,
                         body,
-                        variable_names,
-                    },
+                        params: parameter_names,
+                        body_string: input[body_span].to_owned().into(),
+                    }),
                 );
             }
         };
     } else {
-        // Just a regular expression.
-        let ops = parse_operations(parts);
-        let result = evaluate_operations(&ops, variables, functions, total_span);
+        // Nothing fancy, just an expression to evaluate.
+        let result = evaluate_operations(&operations, functions, interner, total_span);
 
         match result {
             Ok(result) => {
-                variables.insert("ans", result);
+                functions.insert(
+                    answer_token.lexeme,
+                    Rc::new(CustomFunction {
+                        name: answer_token,
+                        body: vec![Operation::number(result)],
+                        body_string: result.to_string().into(),
+                        params: Vec::new(),
+                    }),
+                );
 
                 println!("Result: {}", result);
                 println!();
             }
-            Err((span, e)) => print_error(span, e),
+            Err((span, e)) => print_error(input, span, e),
         }
     }
 }
@@ -527,29 +422,28 @@ fn print_help() {
     println!();
 }
 
-fn print_functions(functions: &HashMap<String, CustomFunction>) {
-    if !functions.iter().any(|(_, f)| !f.variable_names.is_empty()) {
+fn print_functions(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rodeo) {
+    if !functions.iter().any(|(_, f)| !f.params.is_empty()) {
         println!("No custom functions defined");
     } else {
         println!("-- Custom Functions --");
         let stdout = std::io::stdout();
         let mut tw = TabWriter::new(stdout).padding(1);
-        let _ = writeln!(&mut tw, "Name\t|\tArgs\t|\tBody");
+        let _ = tw.write_all(b"Name\t|\tArgs\t|\tBody\n");
 
-        for (name, fun) in functions
-            .iter()
-            .filter(|(_, f)| !f.variable_names.is_empty())
-        {
-            let _ = write!(&mut tw, "{}", &**name);
+        for (name, fun) in functions.iter().filter(|(_, f)| !f.params.is_empty()) {
+            let name = interner.resolve(name);
+            let _ = tw.write_all(name.as_bytes());
             let _ = write!(
                 &mut tw,
                 "\t|\t{}",
-                fun.variable_names.iter().map(|s| &**s).join_with(", ")
+                fun.params
+                    .iter()
+                    .map(|s| interner.resolve(&s.lexeme))
+                    .join_with(", ")
             );
 
-            let body = fun.body[0].span.start();
-
-            let _ = writeln!(&mut tw, "\t|\t{}", &fun.body[0].span.input()[body..]);
+            let _ = writeln!(&mut tw, "\t|\t{}", fun.body_string);
         }
 
         let _ = tw.flush();
@@ -558,27 +452,21 @@ fn print_functions(functions: &HashMap<String, CustomFunction>) {
     println!()
 }
 
-fn print_variables(variables: &HashMap<&str, f64>, functions: &HashMap<String, CustomFunction>) {
-    if variables.is_empty() && !functions.iter().any(|(_, f)| f.variable_names.is_empty()) {
+fn print_variables(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rodeo) {
+    if !functions.iter().any(|(_, f)| f.params.is_empty()) {
         println!("No variables defined");
     } else {
         println!("-- Variables --");
         let stdout = std::io::stdout();
         let mut tw = TabWriter::new(stdout).padding(1);
-        let _ = writeln!(&mut tw, "Name\t|\tValue");
+        let _ = tw.write_all(b"Name\t|\tValue\n");
 
-        for (name, value) in variables {
-            let _ = writeln!(&mut tw, "{}\t|\t{}", name, value);
-        }
-
-        for (name, fun) in functions
-            .iter()
-            .filter(|(_, f)| f.variable_names.is_empty())
-        {
-            let _ = write!(&mut tw, "{}", &**name);
-
-            let body = fun.body[0].span.start();
-            let _ = writeln!(&mut tw, "\t|\t{}", &fun.body[0].span.input()[body..]);
+        for (name, fun) in functions.iter().filter(|(_, f)| f.params.is_empty()) {
+            let name = interner.resolve(name);
+            let _ = tw.write_all(name.as_bytes());
+            let _ = tw.write_all(b"\t|\t");
+            let _ = tw.write_all(fun.body_string.as_bytes());
+            let _ = tw.write_all(b"\n");
         }
 
         let _ = tw.flush();
@@ -596,8 +484,13 @@ fn clear_hinter<'a>(hinter: &mut AutoCompleter, names: impl Iterator<Item = &'a 
 fn main() {
     let inputs: Vec<_> = std::env::args().skip(1).collect();
 
-    let mut variables = HashMap::new();
     let mut functions = HashMap::new();
+    let mut interner = Rodeo::default();
+    let answer_token = Token {
+        lexeme: interner.get_or_intern_static("ans"),
+        source_end: 0,
+        source_start: 0,
+    };
 
     if inputs.is_empty() {
         println!("Postfix Calculator");
@@ -613,20 +506,19 @@ fn main() {
                     rl.add_history_entry(&input);
                     match input.trim() {
                         "help" => print_help(),
-                        "functions" => print_functions(&functions),
-                        "variables" => print_variables(&variables, &functions),
+                        "functions" => print_functions(&functions, &interner),
+                        "variables" => print_variables(&functions, &interner),
                         "clear variables" => {
                             if let Some(helper) = rl.helper_mut() {
                                 clear_hinter(
                                     helper,
                                     functions
                                         .iter()
-                                        .filter(|(_, f)| f.variable_names.is_empty())
-                                        .map(|(name, _)| &**name),
+                                        .filter(|(_, f)| f.params.is_empty())
+                                        .map(|(name, _)| interner.resolve(name)),
                                 );
                             }
-                            functions.retain(|_, f| !f.variable_names.is_empty());
-                            variables.clear();
+                            functions.retain(|_, f| !f.params.is_empty());
                             println!("Variables cleared");
                             println!();
                         }
@@ -636,25 +528,23 @@ fn main() {
                                     helper,
                                     functions
                                         .iter()
-                                        .filter(|(_, f)| !f.variable_names.is_empty())
-                                        .map(|(name, _)| &**name),
+                                        .filter(|(_, f)| !f.params.is_empty())
+                                        .map(|(name, _)| interner.resolve(name)),
                                 );
                             }
-                            functions.retain(|_, f| f.variable_names.is_empty());
+                            functions.retain(|_, f| f.params.is_empty());
                             println!("Custom functions cleared");
                             println!();
                         }
                         _ if input.starts_with("remove ") => {
                             let name = input.trim_start_matches("remove ");
-                            if name == "ans" {
-                                variables.clear();
-                                println!("Removed variable \"{}\"", name);
-                                println!();
-                            } else if let Some(f) = functions.remove(name) {
+
+                            let func = interner.get(name).and_then(|n| functions.remove(&n));
+                            if let Some(f) = func {
                                 if let Some(helper) = rl.helper_mut() {
                                     clear_hinter(helper, std::iter::once(name));
                                 }
-                                if f.variable_names.is_empty() {
+                                if f.params.is_empty() {
                                     println!("Removed variable \"{}\"", name);
                                 } else {
                                     println!("Removed function \"{}\"", name);
@@ -671,7 +561,13 @@ fn main() {
                                     helper.hints.insert(hint);
                                 }
                             };
-                            process_input(input, &mut variables, &mut functions, helper);
+                            process_input(
+                                answer_token,
+                                &input,
+                                &mut functions,
+                                &mut interner,
+                                helper,
+                            );
                         }
                     }
                 }
@@ -685,7 +581,7 @@ fn main() {
     } else {
         for input in inputs {
             println!("Evaluating Expression: {}", input);
-            process_input(input, &mut variables, &mut functions, |_| {});
+            process_input(answer_token, &input, &mut functions, &mut interner, |_| {});
         }
     }
 }

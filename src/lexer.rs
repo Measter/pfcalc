@@ -1,8 +1,4 @@
-use std::{
-    iter::Peekable,
-    ops::{Not, Range},
-    str::CharIndices,
-};
+use std::{iter::Peekable, ops::Range, str::CharIndices};
 
 use lasso::{Rodeo, Spur};
 
@@ -22,19 +18,12 @@ impl Token {
         }
     }
 
-    pub fn as_str(self, interner: &Rodeo) -> &str {
-        interner.resolve(&self.lexeme)
+    pub fn range(self) -> Range<usize> {
+        self.source_start..self.source_end
     }
 }
 
-#[derive(Debug)]
-pub struct CustomFunction {
-    name: Token,
-    body: Vec<Operation>,
-    args: Vec<Token>,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Operator {
     Add,
     Sub,
@@ -79,20 +68,31 @@ pub enum Operator {
     E,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OperationType {
     Number(f64),
     Native(Operator),
     Custom(Token),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Operation {
-    token: Token,
-    op_type: OperationType,
+    pub token: Token,
+    pub op_type: OperationType,
 }
 
 impl Operation {
+    pub fn number(num: f64) -> Self {
+        Self {
+            token: Token {
+                lexeme: Spur::default(),
+                source_start: 0,
+                source_end: 0,
+            },
+            op_type: OperationType::Number(num),
+        }
+    }
+
     fn parse(token: Token, lexeme: &str) -> Self {
         if let Ok(num) = lexeme.parse() {
             return Operation {
@@ -161,7 +161,6 @@ enum ScanResult<'a> {
 }
 
 struct Scanner<'a> {
-    source: &'a str,
     cur_token_start: usize,
     next_token_start: usize,
     chars: Peekable<CharIndices<'a>>,
@@ -224,7 +223,6 @@ impl Scanner<'_> {
 
 pub fn lex_input(input: &str, interner: &mut Rodeo) -> (Vec<Operation>, Option<Vec<Operation>>) {
     let mut scanner = Scanner {
-        source: input,
         chars: input.char_indices().peekable(),
         cur_token_start: 0,
         next_token_start: 0,
@@ -256,8 +254,5 @@ pub fn lex_input(input: &str, interner: &mut Rodeo) -> (Vec<Operation>, Option<V
         }
     }
 
-    (
-        input_tokens,
-        body_tokens.is_empty().not().then(|| body_tokens),
-    )
+    (input_tokens, is_function.then(|| body_tokens))
 }
