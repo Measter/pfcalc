@@ -202,6 +202,42 @@ impl Scanner<'_> {
                     lexeme,
                 )
             }
+            '-' | '0'..='9' => {
+                // Integer part
+                while let Some('0'..='9') = self.peek() {
+                    self.advance();
+                }
+
+                // Fractional part
+                if let Some('.') = self.peek() {
+                    self.advance(); // Consume the '.'
+                    while let Some('0'..='9') = self.peek() {
+                        self.advance();
+                    }
+                }
+
+                // Exponent
+                if let Some('e' | 'E') = self.peek() {
+                    self.advance(); // Consume the 'e'
+
+                    // Exponent might be negative, so a possible '-' here
+                    if let Some('-') = self.peek() {
+                        self.advance();
+                    }
+                    while let Some('0'..='9') = self.peek() {
+                        self.advance();
+                    }
+                }
+
+                let lexeme = &input[self.cur_token_start..self.next_token_start];
+                ScanResult::Token(
+                    Token::new(
+                        interner.get_or_intern(lexeme),
+                        self.cur_token_start..self.next_token_start,
+                    ),
+                    lexeme,
+                )
+            }
             '=' => ScanResult::Function,
             _ => {
                 while matches!(self.peek(), Some(c) if !end_token(c)) {
