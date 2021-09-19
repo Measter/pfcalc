@@ -173,13 +173,13 @@ impl Scanner<'_> {
         ch
     }
 
-    fn peek(&mut self) -> Option<(usize, char)> {
-        self.chars.peek().copied()
+    fn peek(&mut self) -> Option<char> {
+        self.chars.peek().map(|(_, c)| *c)
     }
 
     fn scan_token<'a>(&mut self, input: &'a str, interner: &mut Rodeo) -> ScanResult<'a> {
         let ch = self.advance();
-        let (_, next_ch) = self.peek().unwrap_or_default();
+        let next_ch = self.peek().unwrap_or_default();
         match ch {
             c if c.is_whitespace() => ScanResult::None,
             '+' | '/' | '*' | '%' | '^' => {
@@ -204,7 +204,7 @@ impl Scanner<'_> {
             }
             '=' => ScanResult::Function,
             _ => {
-                while matches!(self.peek(), Some((_, c)) if !end_token(c)) {
+                while matches!(self.peek(), Some(c) if !end_token(c)) {
                     self.advance();
                 }
 
