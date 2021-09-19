@@ -202,17 +202,20 @@ impl Scanner<'_> {
                     lexeme,
                 )
             }
-            '-' | '0'..='9' => {
-                // Integer part
+            '-' | '0'..='9' | '.' => {
+                // Integer part if we started with an integer (or '-'), but fractional part if we
+                // started with a '.'
                 while let Some('0'..='9') = self.peek() {
                     self.advance();
                 }
 
-                // Fractional part
-                if let Some('.') = self.peek() {
-                    self.advance(); // Consume the '.'
-                    while let Some('0'..='9') = self.peek() {
-                        self.advance();
+                if ch != '.' {
+                    // Fractional part if we started with an integer part.
+                    if let Some('.') = self.peek() {
+                        self.advance(); // Consume the '.'
+                        while let Some('0'..='9') = self.peek() {
+                            self.advance();
+                        }
                     }
                 }
 
