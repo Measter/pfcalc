@@ -149,8 +149,8 @@ impl CustomFunction {
 }
 
 fn apply_mono_func(stack: &mut Vec<f64>, f: impl Fn(f64) -> f64) -> Result<(), ErrorKind> {
-    let a = stack.pop().ok_or(ErrorKind::InsufficientStack)?;
-    stack.push(f(a));
+    let a = stack.last_mut().ok_or(ErrorKind::InsufficientStack)?;
+    *a = f(*a);
 
     Ok(())
 }
@@ -158,10 +158,10 @@ fn apply_mono_func(stack: &mut Vec<f64>, f: impl Fn(f64) -> f64) -> Result<(), E
 fn apply_bi_func(stack: &mut Vec<f64>, f: impl Fn(f64, f64) -> f64) -> Result<(), ErrorKind> {
     let (b, a) = stack
         .pop()
-        .and_then(|a| stack.pop().map(|b| (a, b)))
+        .and_then(|b| stack.last_mut().map(|a| (b, a)))
         .ok_or(ErrorKind::InsufficientStack)?;
 
-    stack.push(f(a, b));
+    *a = f(*a, b);
 
     Ok(())
 }
