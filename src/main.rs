@@ -219,10 +219,7 @@ fn evaluate_operations(
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
                 } else {
-                    let mut sum = 0.0;
-                    while let Some(r) = stack.pop() {
-                        sum += r;
-                    }
+                    let sum = stack.drain(..).sum();
                     stack.push(sum);
                     Ok(())
                 }
@@ -231,11 +228,8 @@ fn evaluate_operations(
                 if stack.is_empty() {
                     Err(ErrorKind::InsufficientStack)
                 } else {
-                    let mut sum = 1.0;
-                    while let Some(r) = stack.pop() {
-                        sum *= r;
-                    }
-                    stack.push(sum);
+                    let product = stack.drain(..).product();
+                    stack.push(product);
                     Ok(())
                 }
             }
