@@ -475,10 +475,21 @@ fn print_variables(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rod
     println!()
 }
 
-fn clear_hinter<'a>(hinter: &mut AutoCompleter, names: impl Iterator<Item = &'a str>) {
-    for name in names {
-        hinter.hints.remove(name);
-    }
+fn remove_all_custom(
+    functions: &mut HashMap<Spur, Rc<CustomFunction>>,
+    helper: &mut AutoCompleter,
+    interner: &Rodeo,
+    has_params: bool,
+) {
+    functions
+        .iter()
+        .filter(|(_, f)| f.params.is_empty() == !has_params)
+        .map(|(name, _)| interner.resolve(name))
+        .for_each(|name| {
+            helper.hints.remove(name);
+        });
+
+    functions.retain(|_, f| f.params.is_empty() != !has_params);
 }
 
 fn repl(
@@ -502,30 +513,14 @@ fn repl(
                     "functions" => print_functions(&functions, &interner),
                     "variables" => print_variables(&functions, &interner),
                     "clear variables" => {
-                        if let Some(helper) = rl.helper_mut() {
-                            clear_hinter(
-                                helper,
-                                functions
-                                    .iter()
-                                    .filter(|(_, f)| f.params.is_empty())
-                                    .map(|(name, _)| interner.resolve(name)),
-                            );
-                        }
-                        functions.retain(|_, f| !f.params.is_empty());
+                        let helper = rl.helper_mut().unwrap();
+                        remove_all_custom(functions, helper, interner, false);
                         println!("Variables cleared");
                         println!();
                     }
                     "clear functions" => {
-                        if let Some(helper) = rl.helper_mut() {
-                            clear_hinter(
-                                helper,
-                                functions
-                                    .iter()
-                                    .filter(|(_, f)| !f.params.is_empty())
-                                    .map(|(name, _)| interner.resolve(name)),
-                            );
-                        }
-                        functions.retain(|_, f| f.params.is_empty());
+                        let helper = rl.helper_mut().unwrap();
+                        remove_all_custom(functions, helper, interner, true);
                         println!("Custom functions cleared");
                         println!();
                     }
@@ -534,9 +529,9 @@ fn repl(
 
                         let func = interner.get(name).and_then(|n| functions.remove(&n));
                         if let Some(f) = func {
-                            if let Some(helper) = rl.helper_mut() {
-                                clear_hinter(helper, std::iter::once(name));
-                            }
+                            let helper = rl.helper_mut().unwrap();
+                            helper.hints.remove(name);
+
                             if f.params.is_empty() {
                                 println!("Removed variable \"{}\"", name);
                             } else {
