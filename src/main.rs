@@ -166,7 +166,7 @@ fn apply_bi_func(stack: &mut Vec<f64>, f: fn(f64, f64) -> f64) -> Result<(), Err
 
 fn evaluate_operations(
     ops: &[Operation],
-    functions: &HashMap<Spur, Rc<CustomFunction>>,
+    environment: &HashMap<Spur, Rc<CustomFunction>>,
     interner: &Rodeo,
     total_span: Range<usize>,
 ) -> Result<f64, (Range<usize>, ErrorKind)> {
@@ -249,15 +249,15 @@ fn evaluate_operations(
                 Ok(())
             }
             OperationType::Custom(name) => {
-                match functions.get(&name.lexeme) {
+                match environment.get(&name.lexeme) {
                     Some(func) => {
-                        let mut new_functions = functions.clone();
+                        let mut new_environment = environment.clone();
                         for param in func.params.iter().rev() {
                             let val = stack.pop().ok_or((param.range(), ErrorKind::InsufficientStack))?;
-                            new_functions.insert(param.lexeme, Rc::new(CustomFunction::variable(*param, val)));
+                            new_environment.insert(param.lexeme, Rc::new(CustomFunction::variable(*param, val)));
                         }
 
-                        let result = evaluate_operations(&func.body, &new_functions, interner, func.name.range())?;
+                        let result = evaluate_operations(&func.body, &new_environment, interner, func.name.range())?;
                         stack.push(result);
                         Ok(())
                     },
@@ -295,7 +295,7 @@ fn starts_with_digit(input: &str) -> bool {
 fn process_input(
     answer_token: Token,
     input: &str,
-    functions: &mut HashMap<Spur, Rc<CustomFunction>>,
+    environment: &mut HashMap<Spur, Rc<CustomFunction>>,
     interner: &mut Rodeo,
     mut insert_hint: impl FnMut(String),
 ) {
@@ -321,18 +321,18 @@ fn process_input(
 
         let name = parameter_names.pop().unwrap();
 
-        let mut test_functions = functions.clone();
+        let mut test_environment = environment.clone();
         // Quick test of the function to make sure it works.
         // We don't need the result, just to evaluate to see if it fails.
         for parameter in parameter_names.iter().rev() {
-            test_functions.insert(
+            test_environment.insert(
                 parameter.lexeme,
                 Rc::new(CustomFunction::variable(*parameter, 1.0)),
             );
         }
 
         let body_span = body.first().unwrap().token.source_start..input.len();
-        match evaluate_operations(&body, &test_functions, interner, total_span) {
+        match evaluate_operations(&body, &test_environment, interner, total_span) {
             Err((span, e)) => {
                 print_error(input, span, e);
             }
@@ -343,7 +343,7 @@ fn process_input(
                 let name_lexeme = interner.resolve(&name.lexeme);
 
                 insert_hint(name_lexeme.to_owned());
-                functions.insert(
+                environment.insert(
                     name.lexeme,
                     Rc::new(CustomFunction {
                         name,
@@ -358,7 +358,7 @@ fn process_input(
                 println!();
                 let name_lexeme = interner.resolve(&name.lexeme);
                 insert_hint(name_lexeme.to_owned());
-                functions.insert(
+                environment.insert(
                     name.lexeme,
                     Rc::new(CustomFunction {
                         name,
@@ -371,11 +371,11 @@ fn process_input(
         };
     } else {
         // Nothing fancy, just an expression to evaluate.
-        let result = evaluate_operations(&operations, functions, interner, total_span);
+        let result = evaluate_operations(&operations, environment, interner, total_span);
 
         match result {
             Ok(result) => {
-                functions.insert(
+                environment.insert(
                     answer_token.lexeme,
                     Rc::new(CustomFunction {
                         name: answer_token,
@@ -420,8 +420,8 @@ fn print_help() {
     println!();
 }
 
-fn print_functions(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rodeo) {
-    if !functions.iter().any(|(_, f)| !f.params.is_empty()) {
+fn print_functions(environment: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rodeo) {
+    if !environment.iter().any(|(_, f)| !f.params.is_empty()) {
         println!("No custom functions defined");
     } else {
         println!("-- Custom Functions --");
@@ -429,7 +429,7 @@ fn print_functions(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rod
         let mut tw = TabWriter::new(stdout).padding(1);
         let _ = tw.write_all(b"Name\t|\tArgs\t|\tBody\n");
 
-        for (name, fun) in functions.iter().filter(|(_, f)| !f.params.is_empty()) {
+        for (name, fun) in environment.iter().filter(|(_, f)| !f.params.is_empty()) {
             let name = interner.resolve(name);
             let _ = tw.write_all(name.as_bytes());
             let _ = write!(
@@ -450,8 +450,8 @@ fn print_functions(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rod
     println!()
 }
 
-fn print_variables(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rodeo) {
-    if !functions.iter().any(|(_, f)| f.params.is_empty()) {
+fn print_variables(environment: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rodeo) {
+    if !environment.iter().any(|(_, f)| f.params.is_empty()) {
         println!("No variables defined");
     } else {
         println!("-- Variables --");
@@ -459,7 +459,7 @@ fn print_variables(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rod
         let mut tw = TabWriter::new(stdout).padding(1);
         let _ = tw.write_all(b"Name\t|\tValue\n");
 
-        for (name, fun) in functions.iter().filter(|(_, f)| f.params.is_empty()) {
+        for (name, fun) in environment.iter().filter(|(_, f)| f.params.is_empty()) {
             let name = interner.resolve(name);
             let _ = tw.write_all(name.as_bytes());
             let _ = tw.write_all(b"\t|\t");
@@ -474,12 +474,12 @@ fn print_variables(functions: &HashMap<Spur, Rc<CustomFunction>>, interner: &Rod
 }
 
 fn remove_all_custom(
-    functions: &mut HashMap<Spur, Rc<CustomFunction>>,
+    environment: &mut HashMap<Spur, Rc<CustomFunction>>,
     helper: &mut AutoCompleter,
     interner: &Rodeo,
     has_params: bool,
 ) {
-    functions
+    environment
         .iter()
         .filter(|(_, f)| f.params.is_empty() == !has_params)
         .map(|(name, _)| interner.resolve(name))
@@ -487,12 +487,12 @@ fn remove_all_custom(
             helper.hints.remove(name);
         });
 
-    functions.retain(|_, f| f.params.is_empty() != !has_params);
+    environment.retain(|_, f| f.params.is_empty() != !has_params);
 }
 
 fn repl(
     answer_token: Token,
-    functions: &mut HashMap<Spur, Rc<CustomFunction>>,
+    environment: &mut HashMap<Spur, Rc<CustomFunction>>,
     interner: &mut Rodeo,
 ) {
     println!("Postfix Calculator");
@@ -508,24 +508,24 @@ fn repl(
                 rl.add_history_entry(&input);
                 match input.trim() {
                     "help" => print_help(),
-                    "functions" => print_functions(&functions, &interner),
-                    "variables" => print_variables(&functions, &interner),
+                    "functions" => print_functions(&environment, &interner),
+                    "variables" => print_variables(&environment, &interner),
                     "clear variables" => {
                         let helper = rl.helper_mut().unwrap();
-                        remove_all_custom(functions, helper, interner, false);
+                        remove_all_custom(environment, helper, interner, false);
                         println!("Variables cleared");
                         println!();
                     }
                     "clear functions" => {
                         let helper = rl.helper_mut().unwrap();
-                        remove_all_custom(functions, helper, interner, true);
+                        remove_all_custom(environment, helper, interner, true);
                         println!("Custom functions cleared");
                         println!();
                     }
                     _ if input.starts_with("remove ") => {
                         let name = input.trim_start_matches("remove ");
 
-                        let func = interner.get(name).and_then(|n| functions.remove(&n));
+                        let func = interner.get(name).and_then(|n| environment.remove(&n));
                         if let Some(f) = func {
                             let helper = rl.helper_mut().unwrap();
                             helper.hints.remove(name);
@@ -546,7 +546,7 @@ fn repl(
                             let helper = rl.helper_mut().unwrap();
                             helper.hints.insert(hint);
                         };
-                        process_input(answer_token, &input, functions, interner, helper);
+                        process_input(answer_token, &input, environment, interner, helper);
                     }
                 }
             }
@@ -562,7 +562,7 @@ fn repl(
 fn main() {
     let inputs: Vec<_> = std::env::args().skip(1).collect();
 
-    let mut functions = HashMap::new();
+    let mut environment = HashMap::new();
     let mut interner = Rodeo::default();
     let answer_token = Token {
         lexeme: interner.get_or_intern_static("ans"),
@@ -571,11 +571,17 @@ fn main() {
     };
 
     if inputs.is_empty() {
-        repl(answer_token, &mut functions, &mut interner);
+        repl(answer_token, &mut environment, &mut interner);
     } else {
         for input in inputs {
             println!("Evaluating Expression: {}", input);
-            process_input(answer_token, &input, &mut functions, &mut interner, |_| {});
+            process_input(
+                answer_token,
+                &input,
+                &mut environment,
+                &mut interner,
+                |_| {},
+            );
         }
     }
 }
