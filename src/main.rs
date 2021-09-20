@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeSet, HashMap},
     io::Write,
-    ops::Range,
+    ops::{Add, Div, Mul, Range, Rem, Sub},
     rc::Rc,
 };
 
@@ -148,14 +148,14 @@ impl CustomFunction {
     }
 }
 
-fn apply_mono_func(stack: &mut Vec<f64>, f: impl Fn(f64) -> f64) -> Result<(), ErrorKind> {
+fn apply_mono_func(stack: &mut Vec<f64>, f: fn(f64) -> f64) -> Result<(), ErrorKind> {
     let a = stack.last_mut().ok_or(ErrorKind::InsufficientStack)?;
     *a = f(*a);
 
     Ok(())
 }
 
-fn apply_bi_func(stack: &mut Vec<f64>, f: impl Fn(f64, f64) -> f64) -> Result<(), ErrorKind> {
+fn apply_bi_func(stack: &mut Vec<f64>, f: fn(f64, f64) -> f64) -> Result<(), ErrorKind> {
     let (b, a) = stack
         .pop()
         .and_then(|b| stack.last_mut().map(|a| (b, a)))
@@ -181,41 +181,41 @@ fn evaluate_operations(
                 stack.push(*num);
                 Ok(())
             },
-            OperationType::Native(Operator::Add)   => apply_bi_func(&mut stack, |a, b| a + b),
-            OperationType::Native(Operator::Sub)   => apply_bi_func(&mut stack, |a, b| a - b),
-            OperationType::Native(Operator::Mul)   => apply_bi_func(&mut stack, |a, b| a * b),
-            OperationType::Native(Operator::Div)   => apply_bi_func(&mut stack, |a, b| a / b),
-            OperationType::Native(Operator::Pow)   => apply_bi_func(&mut stack, &f64::powf),
-            OperationType::Native(Operator::Mod)   => apply_bi_func(&mut stack, |a, b| a % b),
+            OperationType::Native(Operator::Add)   => apply_bi_func(&mut stack, Add::add),
+            OperationType::Native(Operator::Sub)   => apply_bi_func(&mut stack, Sub::sub),
+            OperationType::Native(Operator::Mul)   => apply_bi_func(&mut stack, Mul::mul),
+            OperationType::Native(Operator::Div)   => apply_bi_func(&mut stack, Div::div),
+            OperationType::Native(Operator::Pow)   => apply_bi_func(&mut stack, f64::powf),
+            OperationType::Native(Operator::Mod)   => apply_bi_func(&mut stack, Rem::rem),
 
-            OperationType::Native(Operator::Abs)   => apply_mono_func(&mut stack, &f64::abs),
-            OperationType::Native(Operator::Ceil)  => apply_mono_func(&mut stack, &f64::ceil),
-            OperationType::Native(Operator::Floor) => apply_mono_func(&mut stack, &f64::floor),
-            OperationType::Native(Operator::Exp)   => apply_mono_func(&mut stack, &f64::exp),
-            OperationType::Native(Operator::Ln)    => apply_mono_func(&mut stack, &f64::ln),
-            OperationType::Native(Operator::Log10) => apply_mono_func(&mut stack, &f64::log10),
-            OperationType::Native(Operator::Sqrt)  => apply_mono_func(&mut stack, &f64::sqrt),
-            OperationType::Native(Operator::D2Rad) => apply_mono_func(&mut stack, &f64::to_radians),
-            OperationType::Native(Operator::R2Deg) => apply_mono_func(&mut stack, &f64::to_degrees),
-            OperationType::Native(Operator::Rnd)   => apply_mono_func(&mut stack, &f64::round),
+            OperationType::Native(Operator::Abs)   => apply_mono_func(&mut stack, f64::abs),
+            OperationType::Native(Operator::Ceil)  => apply_mono_func(&mut stack, f64::ceil),
+            OperationType::Native(Operator::Floor) => apply_mono_func(&mut stack, f64::floor),
+            OperationType::Native(Operator::Exp)   => apply_mono_func(&mut stack, f64::exp),
+            OperationType::Native(Operator::Ln)    => apply_mono_func(&mut stack, f64::ln),
+            OperationType::Native(Operator::Log10) => apply_mono_func(&mut stack, f64::log10),
+            OperationType::Native(Operator::Sqrt)  => apply_mono_func(&mut stack, f64::sqrt),
+            OperationType::Native(Operator::D2Rad) => apply_mono_func(&mut stack, f64::to_radians),
+            OperationType::Native(Operator::R2Deg) => apply_mono_func(&mut stack, f64::to_degrees),
+            OperationType::Native(Operator::Rnd)   => apply_mono_func(&mut stack, f64::round),
 
-            OperationType::Native(Operator::Log)   => apply_bi_func(&mut stack, &f64::log),
+            OperationType::Native(Operator::Log)   => apply_bi_func(&mut stack, f64::log),
 
-            OperationType::Native(Operator::Cos)   => apply_mono_func(&mut stack, &f64::cos),
-            OperationType::Native(Operator::Cosh)  => apply_mono_func(&mut stack, &f64::cosh),
-            OperationType::Native(Operator::ACos)  => apply_mono_func(&mut stack, &f64::acos),
-            OperationType::Native(Operator::ACosh) => apply_mono_func(&mut stack, &f64::acosh),
+            OperationType::Native(Operator::Cos)   => apply_mono_func(&mut stack, f64::cos),
+            OperationType::Native(Operator::Cosh)  => apply_mono_func(&mut stack, f64::cosh),
+            OperationType::Native(Operator::ACos)  => apply_mono_func(&mut stack, f64::acos),
+            OperationType::Native(Operator::ACosh) => apply_mono_func(&mut stack, f64::acosh),
 
-            OperationType::Native(Operator::Sin)   => apply_mono_func(&mut stack, &f64::sin),
-            OperationType::Native(Operator::Sinh)  => apply_mono_func(&mut stack, &f64::sinh),
-            OperationType::Native(Operator::ASin)  => apply_mono_func(&mut stack, &f64::asin),
-            OperationType::Native(Operator::ASinh) => apply_mono_func(&mut stack, &f64::asinh),
+            OperationType::Native(Operator::Sin)   => apply_mono_func(&mut stack, f64::sin),
+            OperationType::Native(Operator::Sinh)  => apply_mono_func(&mut stack, f64::sinh),
+            OperationType::Native(Operator::ASin)  => apply_mono_func(&mut stack, f64::asin),
+            OperationType::Native(Operator::ASinh) => apply_mono_func(&mut stack, f64::asinh),
 
-            OperationType::Native(Operator::Tan)   => apply_mono_func(&mut stack, &f64::tan),
-            OperationType::Native(Operator::Tanh)  => apply_mono_func(&mut stack, &f64::tanh),
-            OperationType::Native(Operator::Atan)  => apply_mono_func(&mut stack, &f64::atan),
-            OperationType::Native(Operator::Atanh) => apply_mono_func(&mut stack, &f64::atanh),
-            OperationType::Native(Operator::Atan2) => apply_bi_func(&mut stack, &f64::atan2),
+            OperationType::Native(Operator::Tan)   => apply_mono_func(&mut stack, f64::tan),
+            OperationType::Native(Operator::Tanh)  => apply_mono_func(&mut stack, f64::tanh),
+            OperationType::Native(Operator::Atan)  => apply_mono_func(&mut stack, f64::atan),
+            OperationType::Native(Operator::Atanh) => apply_mono_func(&mut stack, f64::atanh),
+            OperationType::Native(Operator::Atan2) => apply_bi_func(&mut stack, f64::atan2),
 
             OperationType::Native(Operator::Sum) => {
                 if stack.is_empty() {
