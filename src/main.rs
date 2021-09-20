@@ -500,18 +500,17 @@ fn repl(
         match line {
             Ok(input) => {
                 rl.add_history_entry(&input);
+                let helper = rl.helper_mut().unwrap();
                 match input.trim() {
                     "help" => print_help(),
                     "functions" => print_functions(environment, interner),
                     "variables" => print_variables(environment, interner),
                     "clear variables" => {
-                        let helper = rl.helper_mut().unwrap();
                         remove_all_custom(environment, helper, interner, false);
                         println!("Variables cleared");
                         println!();
                     }
                     "clear functions" => {
-                        let helper = rl.helper_mut().unwrap();
                         remove_all_custom(environment, helper, interner, true);
                         println!("Custom functions cleared");
                         println!();
@@ -521,7 +520,6 @@ fn repl(
 
                         let func = interner.get(name).and_then(|n| environment.remove(&n));
                         if let Some(f) = func {
-                            let helper = rl.helper_mut().unwrap();
                             helper.hints.remove(name);
 
                             if f.params.is_empty() {
@@ -537,7 +535,6 @@ fn repl(
                     }
                     _ => {
                         let helper = |hint| {
-                            let helper = rl.helper_mut().unwrap();
                             helper.hints.insert(hint);
                         };
                         process_input(answer_token, &input, environment, interner, helper);
