@@ -141,7 +141,7 @@ impl Operation {
             "e" => OperationType::Native(Operator::E),
 
             "sum" => OperationType::Native(Operator::Sum),
-            "prod" => OperationType::Native(Operator::Product),
+            "prod" | "product" => OperationType::Native(Operator::Product),
             _ => OperationType::Custom(token),
         };
 
