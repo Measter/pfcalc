@@ -177,9 +177,17 @@ impl Scanner<'_> {
         self.chars.peek().map(|(_, c)| *c)
     }
 
+    fn peek_nth(&self, n: usize) -> Option<char> {
+        self.chars.clone().nth(n).map(|(_, c)| c)
+    }
+
     fn scan_token<'a>(&mut self, input: &'a str, interner: &mut Rodeo) -> ScanResult<'a> {
         let ch = self.advance();
         let next_ch = self.peek().unwrap_or_default();
+        let third_ch = self.peek_nth(1).unwrap_or_default();
+        let next_is_num =
+            matches!(next_ch, '0'..='9') || matches!((next_ch, third_ch), ('.', '0'..='9'));
+
         match ch {
             c if c.is_whitespace() => ScanResult::None,
             '+' | '/' | '*' | '%' | '^' => {
@@ -192,7 +200,7 @@ impl Scanner<'_> {
                     lexeme,
                 )
             }
-            '-' if !next_ch.is_ascii_digit() => {
+            '-' if !next_is_num => {
                 let lexeme = &input[self.cur_token_start..self.next_token_start];
                 ScanResult::Token(
                     Token::new(
@@ -230,6 +238,12 @@ impl Scanner<'_> {
                     while let Some('0'..='9') = self.peek() {
                         self.advance();
                     }
+                }
+
+                // The user might have not left space between the number and the next token, which
+                // we want to be an error, so we'll now consume until the next char is end_token.
+                while matches!(self.peek(), Some(c) if !end_token(c)) {
+                    self.advance();
                 }
 
                 let lexeme = &input[self.cur_token_start..self.next_token_start];
