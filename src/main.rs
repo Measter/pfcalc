@@ -545,9 +545,8 @@ fn repl(
                     }
                     _ => {
                         let helper = |hint| {
-                            if let Some(helper) = rl.helper_mut() {
-                                helper.hints.insert(hint);
-                            }
+                            let helper = rl.helper_mut().unwrap();
+                            helper.hints.insert(hint);
                         };
                         process_input(answer_token, &input, functions, interner, helper);
                     }
