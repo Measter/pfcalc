@@ -174,9 +174,9 @@ fn evaluate_operations(
 
     for op in ops {
         #[rustfmt::skip]
-        let ret = match &op.op_type {
+        let ret = match op.op_type {
             OperationType::Number(num) => {
-                stack.push(*num);
+                stack.push(num);
                 Ok(())
             },
             OperationType::Native(Operator::Add)   => apply_bi_func(&mut stack, Add::add),
@@ -502,8 +502,8 @@ fn repl(
                 rl.add_history_entry(&input);
                 match input.trim() {
                     "help" => print_help(),
-                    "functions" => print_functions(&environment, &interner),
-                    "variables" => print_variables(&environment, &interner),
+                    "functions" => print_functions(environment, interner),
+                    "variables" => print_variables(environment, interner),
                     "clear variables" => {
                         let helper = rl.helper_mut().unwrap();
                         remove_all_custom(environment, helper, interner, false);
