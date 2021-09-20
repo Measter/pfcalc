@@ -481,6 +481,92 @@ fn clear_hinter<'a>(hinter: &mut AutoCompleter, names: impl Iterator<Item = &'a 
     }
 }
 
+fn repl(
+    answer_token: Token,
+    functions: &mut HashMap<Spur, Rc<CustomFunction>>,
+    interner: &mut Rodeo,
+) {
+    println!("Postfix Calculator");
+    println!("type \"help\" for more information.");
+
+    let completer = AutoCompleter::new();
+    let mut rl = Editor::new();
+    rl.set_helper(Some(completer));
+    loop {
+        let line = rl.readline(">>> ");
+        match line {
+            Ok(input) => {
+                rl.add_history_entry(&input);
+                match input.trim() {
+                    "help" => print_help(),
+                    "functions" => print_functions(&functions, &interner),
+                    "variables" => print_variables(&functions, &interner),
+                    "clear variables" => {
+                        if let Some(helper) = rl.helper_mut() {
+                            clear_hinter(
+                                helper,
+                                functions
+                                    .iter()
+                                    .filter(|(_, f)| f.params.is_empty())
+                                    .map(|(name, _)| interner.resolve(name)),
+                            );
+                        }
+                        functions.retain(|_, f| !f.params.is_empty());
+                        println!("Variables cleared");
+                        println!();
+                    }
+                    "clear functions" => {
+                        if let Some(helper) = rl.helper_mut() {
+                            clear_hinter(
+                                helper,
+                                functions
+                                    .iter()
+                                    .filter(|(_, f)| !f.params.is_empty())
+                                    .map(|(name, _)| interner.resolve(name)),
+                            );
+                        }
+                        functions.retain(|_, f| f.params.is_empty());
+                        println!("Custom functions cleared");
+                        println!();
+                    }
+                    _ if input.starts_with("remove ") => {
+                        let name = input.trim_start_matches("remove ");
+
+                        let func = interner.get(name).and_then(|n| functions.remove(&n));
+                        if let Some(f) = func {
+                            if let Some(helper) = rl.helper_mut() {
+                                clear_hinter(helper, std::iter::once(name));
+                            }
+                            if f.params.is_empty() {
+                                println!("Removed variable \"{}\"", name);
+                            } else {
+                                println!("Removed function \"{}\"", name);
+                            }
+                            println!();
+                        } else {
+                            println!("Unknown variable or function \"{}\"", name);
+                            println!();
+                        }
+                    }
+                    _ => {
+                        let helper = |hint| {
+                            if let Some(helper) = rl.helper_mut() {
+                                helper.hints.insert(hint);
+                            }
+                        };
+                        process_input(answer_token, &input, functions, interner, helper);
+                    }
+                }
+            }
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
+            Err(e) => {
+                eprintln!("{:?}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
 fn main() {
     let inputs: Vec<_> = std::env::args().skip(1).collect();
 
@@ -493,91 +579,7 @@ fn main() {
     };
 
     if inputs.is_empty() {
-        println!("Postfix Calculator");
-        println!("type \"help\" for more information.");
-
-        let completer = AutoCompleter::new();
-        let mut rl = Editor::new();
-        rl.set_helper(Some(completer));
-        loop {
-            let line = rl.readline(">>> ");
-            match line {
-                Ok(input) => {
-                    rl.add_history_entry(&input);
-                    match input.trim() {
-                        "help" => print_help(),
-                        "functions" => print_functions(&functions, &interner),
-                        "variables" => print_variables(&functions, &interner),
-                        "clear variables" => {
-                            if let Some(helper) = rl.helper_mut() {
-                                clear_hinter(
-                                    helper,
-                                    functions
-                                        .iter()
-                                        .filter(|(_, f)| f.params.is_empty())
-                                        .map(|(name, _)| interner.resolve(name)),
-                                );
-                            }
-                            functions.retain(|_, f| !f.params.is_empty());
-                            println!("Variables cleared");
-                            println!();
-                        }
-                        "clear functions" => {
-                            if let Some(helper) = rl.helper_mut() {
-                                clear_hinter(
-                                    helper,
-                                    functions
-                                        .iter()
-                                        .filter(|(_, f)| !f.params.is_empty())
-                                        .map(|(name, _)| interner.resolve(name)),
-                                );
-                            }
-                            functions.retain(|_, f| f.params.is_empty());
-                            println!("Custom functions cleared");
-                            println!();
-                        }
-                        _ if input.starts_with("remove ") => {
-                            let name = input.trim_start_matches("remove ");
-
-                            let func = interner.get(name).and_then(|n| functions.remove(&n));
-                            if let Some(f) = func {
-                                if let Some(helper) = rl.helper_mut() {
-                                    clear_hinter(helper, std::iter::once(name));
-                                }
-                                if f.params.is_empty() {
-                                    println!("Removed variable \"{}\"", name);
-                                } else {
-                                    println!("Removed function \"{}\"", name);
-                                }
-                                println!();
-                            } else {
-                                println!("Unknown variable or function \"{}\"", name);
-                                println!();
-                            }
-                        }
-                        _ => {
-                            let helper = |hint| {
-                                if let Some(helper) = rl.helper_mut() {
-                                    helper.hints.insert(hint);
-                                }
-                            };
-                            process_input(
-                                answer_token,
-                                &input,
-                                &mut functions,
-                                &mut interner,
-                                helper,
-                            );
-                        }
-                    }
-                }
-                Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    std::process::exit(1);
-                }
-            }
-        }
+        repl(answer_token, &mut functions, &mut interner);
     } else {
         for input in inputs {
             println!("Evaluating Expression: {}", input);
