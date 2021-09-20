@@ -400,23 +400,23 @@ fn print_help() {
 
     let stdout = std::io::stdout();
     let mut tw = TabWriter::new(stdout).padding(1);
-    let _ = tw.write_all(b"functions\tList all custom defined functions");
-    let _ = tw.write_all(b"variablesriablt all defined variables");
-    let _ = tw.write_all(b"clear functions\tRemove all custom defined functions");
-    let _ = tw.write_all(b"clear variables\tRemove all defined variables");
-    let _ = tw.write_all(b"remove <name>\tRemove a variable or custom function by name");
+    let _ = tw.write_all(b"functions\tList all custom defined functions\n");
+    let _ = tw.write_all(b"variables\tList all defined variables\n");
+    let _ = tw.write_all(b"clear functions\tRemove all custom defined functions\n");
+    let _ = tw.write_all(b"clear variables\tRemove all defined variables\n");
+    let _ = tw.write_all(b"remove <name>\tRemove a variable or custom function by name\n");
     let _ = tw.flush();
 
     println!();
 
-    println!("-- Built in Functions --");
+    println!("-- Built in Functions --\n");
 
-    let _ = tw.write_all(b"+(add)\t-(sub)\t*(mul)\t/(div)\t^(pow)\t%(rem)");
-    let _ = tw.write_all(b"abs\tceil\tfloor\texp\tln\tlog10");
-    let _ = tw.write_all(b"log\tsqrt\td2rad\tr2deg\tround\tcos");
-    let _ = tw.write_all(b"cosh\tacos\tacosh\tsin\tsinh\tasin");
-    let _ = tw.write_all(b"asinh\ttan\ttanh\tatan\tatanh\tatan2");
-    let _ = tw.write_all(b"sum\tprod\tpi\te\t\t");
+    let _ = tw.write_all(b"+(add)\t-(sub)\t*(mul)\t/(div)\t^(pow)\t%(rem)\n");
+    let _ = tw.write_all(b"abs\tceil\tfloor\texp\tln\tlog10\n");
+    let _ = tw.write_all(b"log\tsqrt\td2rad\tr2deg\tround\tcos\n");
+    let _ = tw.write_all(b"cosh\tacos\tacosh\tsin\tsinh\tasin\n");
+    let _ = tw.write_all(b"asinh\ttan\ttanh\tatan\tatanh\tatan2\n");
+    let _ = tw.write_all(b"sum\tprod\tpi\te\t\t\n");
     let _ = tw.flush();
 
     println!();
