@@ -93,15 +93,13 @@ impl Hinter for AutoCompleter {
             .unwrap_or((pos, line));
 
         let finder = |map: &BTreeSet<String>| {
-            map.iter()
-                .filter_map(|hint| {
-                    if hint.starts_with(&line[..pos]) {
-                        Some(hint[pos..].into())
-                    } else {
-                        None
-                    }
-                })
-                .next()
+            map.iter().find_map(|hint| {
+                if hint.starts_with(&line[..pos]) {
+                    Some(hint[pos..].into())
+                } else {
+                    None
+                }
+            })
         };
 
         finder(&self.builtins).or_else(|| finder(&self.hints))
