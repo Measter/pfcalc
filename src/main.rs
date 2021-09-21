@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    cell::RefCell,
     collections::{BTreeSet, HashMap},
     io::Write,
     ops::{Add, Div, Mul, Range, Rem, Sub},
@@ -20,7 +21,7 @@ use lexer::*;
 
 struct AutoCompleter {
     builtins: BTreeSet<String>,
-    hints: BTreeSet<String>,
+    hints: RefCell<BTreeSet<String>>,
 }
 
 impl AutoCompleter {
@@ -41,7 +42,7 @@ impl AutoCompleter {
 
         Self {
             builtins: keywords.iter().map(|&k| k.to_owned()).collect(),
-            hints: BTreeSet::new(),
+            hints: RefCell::new(BTreeSet::new()),
         }
     }
 }
@@ -66,11 +67,13 @@ impl Completer for AutoCompleter {
             .map(|(idx, _)| (idx + 1, &line[idx + 1..]))
             .unwrap_or((0, line));
 
-        let mut matches: Vec<_> = self
-            .builtins
+        let Self { builtins, hints } = self;
+        let hints = hints.borrow();
+
+        let mut matches: Vec<_> = builtins
             .iter()
             .filter(|f| f.starts_with(line))
-            .chain(self.hints.iter().filter(|f| f.starts_with(line)))
+            .chain(hints.iter().filter(|f| f.starts_with(line)))
             .cloned()
             .collect();
         matches.sort();
@@ -102,7 +105,10 @@ impl Hinter for AutoCompleter {
             })
         };
 
-        finder(&self.builtins).or_else(|| finder(&self.hints))
+        let Self { builtins, hints } = self;
+        let hints = hints.borrow();
+
+        finder(builtins).or_else(|| finder(&hints))
     }
 }
 
@@ -291,6 +297,7 @@ fn process_input(
     input: &str,
     environment: &mut HashMap<Spur, Rc<CustomFunction>>,
     interner: &mut Rodeo,
+    output_success: bool,
     mut insert_hint: impl FnMut(String),
 ) {
     let (operations, body) = lexer::lex_input(input, interner);
@@ -331,11 +338,12 @@ fn process_input(
                 print_error(input, span, e);
             }
             Ok(res) if parameter_names.is_empty() => {
-                println!("Variable defined: {}", input);
-                println!();
+                if output_success {
+                    println!("Variable defined: {}", input);
+                    println!();
+                }
 
                 let name_lexeme = interner.resolve(&name.lexeme);
-
                 insert_hint(name_lexeme.to_owned());
                 environment.insert(
                     name.lexeme,
@@ -348,8 +356,11 @@ fn process_input(
                 );
             }
             Ok(_) => {
-                println!("Function defined: {}", input);
-                println!();
+                if output_success {
+                    println!("Function defined: {}", input);
+                    println!();
+                }
+
                 let name_lexeme = interner.resolve(&name.lexeme);
                 insert_hint(name_lexeme.to_owned());
                 environment.insert(
@@ -379,8 +390,10 @@ fn process_input(
                     }),
                 );
 
-                println!("Result: {}", result);
-                println!();
+                if output_success {
+                    println!("Result: {}", result);
+                    println!();
+                }
             }
             Err((span, e)) => print_error(input, span, e),
         }
@@ -469,16 +482,17 @@ fn print_variables(environment: &HashMap<Spur, Rc<CustomFunction>>, interner: &R
 
 fn remove_all_custom(
     environment: &mut HashMap<Spur, Rc<CustomFunction>>,
-    helper: &mut AutoCompleter,
+    helper: &AutoCompleter,
     interner: &Rodeo,
     has_params: bool,
 ) {
+    let mut hints = helper.hints.borrow_mut();
     environment
         .iter()
         .filter(|(_, f)| f.params.is_empty() == !has_params)
         .map(|(name, _)| interner.resolve(name))
         .for_each(|name| {
-            helper.hints.remove(name);
+            hints.remove(name);
         });
 
     environment.retain(|_, f| f.params.is_empty() != !has_params);
@@ -488,30 +502,29 @@ fn repl(
     answer_token: Token,
     environment: &mut HashMap<Spur, Rc<CustomFunction>>,
     interner: &mut Rodeo,
+    completer: &mut AutoCompleter,
 ) {
     println!("Postfix Calculator");
     println!("type \"help\" for more information.");
 
-    let completer = AutoCompleter::new();
     let mut rl = Editor::new();
-    rl.set_helper(Some(completer));
+    rl.set_helper(Some(&*completer));
     loop {
         let line = rl.readline(">>> ");
         match line {
             Ok(input) => {
                 rl.add_history_entry(&input);
-                let helper = rl.helper_mut().unwrap();
                 match input.trim() {
                     "help" => print_help(),
                     "functions" => print_functions(environment, interner),
                     "variables" => print_variables(environment, interner),
                     "clear variables" => {
-                        remove_all_custom(environment, helper, interner, false);
+                        remove_all_custom(environment, &completer, interner, false);
                         println!("Variables cleared");
                         println!();
                     }
                     "clear functions" => {
-                        remove_all_custom(environment, helper, interner, true);
+                        remove_all_custom(environment, &completer, interner, true);
                         println!("Custom functions cleared");
                         println!();
                     }
@@ -520,7 +533,8 @@ fn repl(
 
                         let func = interner.get(name).and_then(|n| environment.remove(&n));
                         if let Some(f) = func {
-                            helper.hints.remove(name);
+                            let mut hints = completer.hints.borrow_mut();
+                            hints.remove(name);
 
                             if f.params.is_empty() {
                                 println!("Removed variable \"{}\"", name);
@@ -534,10 +548,11 @@ fn repl(
                         }
                     }
                     _ => {
+                        let mut hints = completer.hints.borrow_mut();
                         let helper = |hint| {
-                            helper.hints.insert(hint);
+                            hints.insert(hint);
                         };
-                        process_input(answer_token, &input, environment, interner, helper);
+                        process_input(answer_token, &input, environment, interner, true, helper);
                     }
                 }
             }
@@ -550,19 +565,68 @@ fn repl(
     }
 }
 
+fn load_conf(
+    answer_token: Token,
+    environment: &mut HashMap<Spur, Rc<CustomFunction>>,
+    interner: &mut Rodeo,
+    completer: &mut AutoCompleter,
+) {
+    let mut path = match dirs::home_dir() {
+        Some(path) => path,
+        None => {
+            eprintln!("Failed to get home directory");
+            return;
+        }
+    };
+
+    path.push("pfcalc.conf");
+    if !path.exists() {
+        return;
+    }
+
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to load config from `{}`", path.display());
+            eprintln!("{}", e);
+            return;
+        }
+    };
+
+    let mut hints = completer.hints.borrow_mut();
+    for line in contents.lines() {
+        process_input(answer_token, line, environment, interner, false, |hint| {
+            hints.insert(hint);
+        });
+    }
+}
+
 fn main() {
     let inputs: Vec<_> = std::env::args().skip(1).collect();
 
     let mut environment = HashMap::new();
     let mut interner = Rodeo::default();
+    let mut completer = AutoCompleter::new();
+
     let answer_token = Token {
         lexeme: interner.get_or_intern_static("ans"),
         source_end: 0,
         source_start: 0,
     };
+    load_conf(
+        answer_token,
+        &mut environment,
+        &mut interner,
+        &mut completer,
+    );
 
     if inputs.is_empty() {
-        repl(answer_token, &mut environment, &mut interner);
+        repl(
+            answer_token,
+            &mut environment,
+            &mut interner,
+            &mut completer,
+        );
     } else {
         for input in inputs {
             println!("Evaluating Expression: {}", input);
@@ -571,6 +635,7 @@ fn main() {
                 &input,
                 &mut environment,
                 &mut interner,
+                true,
                 |_| {},
             );
         }
